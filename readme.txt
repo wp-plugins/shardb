@@ -9,7 +9,7 @@ Implements a MD5 hash based multiple database sharding structure for WordPress M
 
 == Description ==
 
-This is a beta release intended for larger WordPress MU installs using an existing 1-3 character MD5 hash (by blog id) based multi-DB sharding structure. The beta release supports 16, 256 or 4096 database shards. It also supports a separate database for blog id 1 and multiple VIP databases. 
+This is a beta release intended for larger WordPress MU installs using an existing 1-3 character MD5 hash (by blog id) based multi-DB sharding structure. The beta release supports 16, 256 or 4096 database shards. It also supports a separate database for blog id 1 and multiple VIP databases (home & VIP code contribution by Luke Poland).
 
 It has been tested with over 50 plugins including BuddyPress 1.1 through 1.1.3. I have not found any issues with any of the tested plugins. It should support any plugin that works with (and accesses all data via) the regular WordPress MU database code. 
 
@@ -35,8 +35,16 @@ In January 2010, the following will be added
 	define('WPMU', '1');
 	require_once('db-settings.php');
 5. upload db.php to /wp-content/.
+6. upload shardb-admin.php to /wp-content/mu-plugins/.
+
+== Screenshots ==
+
+1. Site admin blogs screen showing dataset / partition for each blog.
 
 == Changelog ==
+
+= 2.7.2 =
+* Added dataset / partition to site admin blogs screen.
 
 = 2.7.1 =
 * Original version.
