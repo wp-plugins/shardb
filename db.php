@@ -1510,7 +1510,7 @@ class wpdb extends db {
 	var $blogid = 0;
 	var $siteid = 0;
 	var $global_tables = array('blogs', 'signups', 'site', 'sitemeta', 'users', 'usermeta', 'sitecategories', 'registration_log', 'blog_versions');
-	var $blog_tables = array('posts', 'categories', 'post2cat', 'comments', 'links', 'link2cat', 'options',
+	var $blog_tables = array('posts', 'categories', 'post2cat', 'comments', 'commentmeta', 'links', 'link2cat', 'options',
 			'postmeta', 'terms', 'term_taxonomy', 'term_relationships');
 	var $blogs, $signups, $site, $sitemeta, $users, $usermeta, $sitecategories, $registration_log, $blog_versions, $posts, $categories, $post2cat, $comments, $links, $link2cat, $options, $postmeta, $terms, $term_taxonomy, $term_relationships;
 

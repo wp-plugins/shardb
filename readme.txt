@@ -2,7 +2,7 @@
 Contributors: wpmuguru
 Tags: database, sharding, multiple, wpmu 
 Requires at least: 2.7.1
-Tested up to: 2.9-RC
+Tested up to: 2.9.1.1
 Stable tag: trunk
 
 Implements a MD5 hash based multiple database sharding structure for WordPress MU blog tables.
@@ -42,6 +42,9 @@ In January 2010, the following will be added
 1. Site admin blogs screen showing dataset / partition for each blog.
 
 == Changelog ==
+
+= 2.7.3 =
+* Added 2.9.1.1 comment meta support.
 
 = 2.7.2 =
 * Added dataset / partition to site admin blogs screen.
