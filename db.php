@@ -1,4 +1,10 @@
 <?php
+/*
+ * allow this version to run on 2.9.X
+ */
+if( !function_exists( 'is_multisite' ) ) {
+	function is_multisite() { return true; }
+}
 
 define('OBJECT', 'OBJECT', true);
 define('OBJECT_K', 'OBJECT_K', false);
@@ -11,321 +17,105 @@ if (!defined('SAVEQUERIES'))
 
 if ( !class_exists('db') ) :
 class db {
-	/**
- 	 * Whether to show SQL/DB errors
- 	 *
- 	 * @since 0.71
- 	 * @access private
- 	 * @var bool
- 	 */
+	/* Update for WP 3.0 */
+	var $blog_tables = array( 'posts', 'comments', 'links', 'options', 'postmeta', 'terms', 'term_taxonomy', 'term_relationships', 'commentmeta' );
+	var $user_tables = array( 'users', 'usermeta' );
+	var $old_tables = array( 'categories', 'post2cat', 'link2cat' );
+	var $ms_global_tables = array( 'blogs', 'signups', 'site', 'sitemeta', 'sitecategories', 'registration_log', 'blog_versions' );
+	var $global_tables = false;
+	var $site_tables = false;
+
 	var $show_errors = false;
-
-	/**
- 	 * Whether to suppress errors during the DB bootstrapping.
- 	 *
- 	 * @access private
- 	 * @since {@internal Version Unknown}}
- 	 * @var bool
- 	 */
 	var $suppress_errors = false;
-
-	/**
- 	 * The last error during query.
- 	 *
- 	 * @since {@internal Version Unknown}}
- 	 * @var string
- 	 */
 	var $last_error;
 
-	/**
-	 * Amount of queries made
-	 *
-	 * @since 1.2.0
-	 * @access private
-	 * @var int
-	 */
 	var $num_queries = 0;
-
-	/**
- 	 * Saved result of the last query made
- 	 *
- 	 * @since 1.2.0
- 	 * @access private
- 	 * @var array
- 	 */
 	var $last_query;
-
-	/**
-	 * The last table that was queried
-	 * @var string
-	 */
 	var $last_table;
-
-	/**
-	 * After any SQL_CALC_FOUND_ROWS query, the query "SELECT FOUND_ROWS()"
-	 * is sent and the mysql result resource stored here. The next query
-	 * for FOUND_ROWS() will retrieve this. We do this to prevent any
-	 * intervening queries from making FOUND_ROWS() inaccessible.
-	 * @var resource
-	 */
 	var $last_found_rows_result;
-
-	/**
- 	 * Saved info on the table column
- 	 *
-	 * The results of mysql_fetch_field() on the last query result
- 	 *
- 	 * @since 1.2.0
- 	 * @access private
- 	 * @var array
- 	 */
 	var $col_info;
 	
-	/**
- 	 * Saved queries that were executed
- 	 *
- 	 * @since 1.5.0
- 	 * @access private
- 	 * @var array
- 	 */
 	var $queries = array();
-
-	/**
-	 * Format specifiers for DB columns. Columns not listed here default to %s.  Initialized in wp-settings.php.
-	 *
-	 * Keys are colmn names, values are format types: 'ID' => '%d'
-	 *
-	 * @since 2.8.0
-	 * @see wpdb:prepare()
-	 * @see wpdb:insert()
-	 * @see wpdb:update()
-	 * @access public
-	 * @war array
-	 */
 	var $field_types = array();
-
-	/**
-	 * Whether to use the query log
-	 * @var bool
-	 */
 	var $save_queries = false;
 
-	/**
-	 * Database table columns charset
-	 *
-	 * @since 2.2.0
-	 * @access public
-	 * @var string
-	 */
 	var $charset;
-
-	/**
-	 * Database table columns collate
-	 *
-	 * @since 2.2.0
-	 * @access public
-	 * @var string
-	 */
 	var $collate;
-
-	/**
-	 * Whether to use mysql_real_escape_string
-	 *  
-	 * @since 2.8.0
-	 * @access public
-	 * @var bool
-	 */
 	var $real_escape = false;
 
-	/**
-	 * The current mysql link resource
-	 * @var resource
-	 */
 	var $dbh;
-
-	/**
-	 * Associative array (dbhname => dbh) for established mysql connections
-	 * @var array
-	 */
 	var $dbhs;
-
-	/**
-	 * If true, skip all the multi-db stuff
-	 * @var bool
-	 */
 	var $single_db = false;
-
-	/**
-	 * The connection info for a single db
-	 * @var array
-	 */
 	var $db_server = array();
-
-	/**
-	 * The multi-dimensional array of datasets, partitions, and servers
-	 * @var array
-	 */
 	var $db_servers = array();
-
-	/**
-	 * Optional directory of tables and their datasets
-	 * @var array
-	 */
 	var $db_tables = array();
 
-	/**
-	 * Whether to use mysql_pconnect instead of mysql_connect
-	 * @var bool
-	 */
 	var $persistent = false;
-
-	/**
-	 * The maximum number of db links to keep open. The least-recently used
-	 * link will be closed when the number of links exceeds this.
-	 * @var int
-	 */
 	var $max_connections = 10;
-
-	/**
-	 * Send Reads To Masters. This disables slave connections while true.
-	 * @var bool
-	 */
 	var $srtm = false;
-
-	/**
-	 * The log of db connections made and the time each one took
-	 * @var array
-	 */
 	var $db_connections;
-
-	/**
-	 * The host of the current dbh
-	 * @var string
-	 */
 	var $current_host;
-
-	/**
-	 * Lookup array (dbhname => host:port)
-	 * @var array
-	 */
 	var $dbh2host = array();
-
-	/**
-	 * The last server used and the database name selected
-	 * @var array
-	 */
 	var $last_used_server;
-
-	/**
-	 * Lookup array (dbhname => (server, db name) ) for re-selecting the db
-	 * when a link is re-used.
-	 * @var array
-	 */
 	var $used_servers = array();
-
-	/**
-	 * Lookup array (dbhname => true) indicating that new links to dbhname
-	 * should be sent to the master
-	 * @var array
-	 */
 	var $written_servers = array();
 
-	/**
-	 * Triggers __construct() for backwards compatibility with PHP4
-	 */
-	function db($args = array()) {
-		return $this->__construct($args);
+	function db( $args = array() ) {
+		return $this->__construct( $args );
 	}
 
-	/**
-	 * Gets ready to make database connections
-	 * @param array db class vars
-	 */
-	function __construct($args = null ) {
-		if ( is_array($args) )
+	function __construct( $args = null ) {
+		if ( is_array( $args ) )
 			foreach ( get_class_vars(__CLASS__) as $var => $value )
-				if ( isset($args[$var]) )
+				if ( isset( $args[$var] ) )
 					$this->$var = $args[$var];
-		if ( ! $this->single_db ) {
-			if ( empty($this->db_servers) && isset($GLOBALS['db_servers']) && is_array($GLOBALS['db_servers']) )
+		if ( !$this->single_db ) {
+			if ( empty( $this->db_servers ) && isset( $GLOBALS['db_servers'] ) && is_array( $GLOBALS['db_servers'] ) )
 				$this->db_servers =& $GLOBALS['db_servers'];
-			if ( empty($this->db_tables) && isset($GLOBALS['db_tables']) && is_array($GLOBALS['db_tables']) )
+			if ( empty( $this->db_tables ) && isset( $GLOBALS['db_tables'] ) && is_array( $GLOBALS['db_tables'] ) )
 				$this->db_tables =& $GLOBALS['db_tables'];
 		}
-		if ( empty($this->db_servers) ) {
-			if ( empty($this->db_server) )
-				$this->bail("No database servers have been set up.");
+		if ( empty( $this->db_servers ) ) {
+			if ( empty( $this->db_server ) )
+				$this->bail( 'No database servers have been set up.' );
 			else
 				$this->single_db = true;
 		}
+		if( is_multisite() )
+			$this->global_tables = array_merge( $this->user_tables, $this->ms_global_tables );
+		else
+			$this->global_tables = $this->user_tables;
+		
+		$this->site_tables = array_merge( $this->blog_tables, $this->old_tables );
+	}
+	/*
+	 * weak & strong escaping functions
+	 */
+	function _weak_escape( $string ) {
+		return addslashes( $string );
 	}
 
-	function _weak_escape($string) {
-		return addslashes($string);
-	}
-
-	function _real_escape($string) {
+	function _real_escape( $string ) {
 		if ( $this->dbh && $this->real_escape )
 			return mysql_real_escape_string( $string, $this->dbh );
 		else
 			return addslashes( $string );
 	}
 
-	function _escape($data) {
-		if ( is_array($data) ) {
-			foreach ( (array) $data as $k => $v ) {
-				if ( is_array($v) )
-					$data[$k] = $this->_escape( $v );
-				else
-					$data[$k] = $this->_real_escape( $v );
-			}
-		} else {
-			$data = $this->_real_escape( $data );
-		}
-
-		return $data;
+	function _escape( $data ) {
+		return is_array( $data ) ? array_map( array( &$this, '_escape' ), $data ) : $this->_real_escape( $data );
 	}
 
-	/**
-	 * Escapes content for insertion into the database using addslashes(), for security
-	 *
-	 * @since 0.71
-	 *
-	 * @param string|array $data
-	 * @return string query safe string
-	 */
-	function escape($data) {
-		if ( is_array($data) ) {
-			foreach ( (array) $data as $k => $v ) {
-				if ( is_array($v) )
-					$data[$k] = $this->escape( $v );
-				else
-					$data[$k] = $this->_weak_escape( $v );
-			}
-		} else {
-			$data = $this->_weak_escape( $data );
-		}
-
-		return $data;
+	function escape( $data ) {
+		return is_array( $data ) ? array_map( array( &$this, 'escape' ), $data ) : $this->_weak_escape( $data );
 	}
 
-	/**
-	 * Escapes content by reference for insertion into the database, for security
-	 *
-	 * @since 2.3.0
-	 *
-	 * @param string $s
-	 */
-	function escape_by_ref(&$string) {
+	function escape_by_ref( &$string ) {
 		$string = $this->_real_escape( $string );
 	}
 
-	/**
-	 * Escapes array recursively for insertion into the database, for security
-	 * @param array $array
-	 */
-	function escape_deep( $array ) {
-		return is_array($array) ? array_map(array(&$this, 'escape_deep'), $array) : $this->escape( $array );
+	function escape_deep( $data ) {
+		return is_array( $data ) ? array_map( array( &$this, 'escape_deep' ), $data ) : $this->escape( $data );
 	}
 
 	/**
@@ -351,7 +141,7 @@ class db {
 	 * @param mixed $args,... further variables to substitute into the query's placeholders if being called like {@link http://php.net/sprintf sprintf()}.
 	 * @return null|string Sanitized query string
 	 */
-	function prepare($query = null) { // ( $query, *$args )
+	function prepare( $query = null ) { // ( $query, *$args )
 		if ( is_null( $query ) )
 			return;
 		$args = func_get_args();
@@ -439,7 +229,7 @@ class db {
 	 * @return bool previous setting of show_errors
 	 */
 	function hide_errors() {
-		return $this->show_errors(false);
+		return $this->show_errors( false );
 	}
 
 	/**
@@ -530,38 +320,30 @@ class db {
 	 * @param unknown_type $table
 	 * @return unknown
 	 */
-	function get_ds_part_from_table($table) {
+	function get_ds_part_from_table( $table ) {
 		global $shardb_hash_length, $shardb_dataset, $shardb_num_db, $vip_db;
 		
-		$prefix = ( defined( 'WPMU' ) ? $this->base_prefix : $this->prefix );
 		$table = str_replace( '\\', '', $table );
 
-		if ( substr( $table, 0, strlen( $prefix ) ) != $prefix ) {
+		if ( substr( $table, 0, strlen( $this->base_prefix ) ) != $this->base_prefix
+			|| !isset( $shardb_hash_length )
+			|| !preg_match( '/^' . $this->base_prefix . '([0-9]+)_/', $table, $matches ) )
 			return false;
-		} else if ( preg_match('/^' . $prefix . '([0-9]+)_/', $table, $matches) ) {
-		// e.g. wp_345_options
-			if( isset( $shardb_hash_length ) ) {
-				$dataset = $shardb_dataset; 
-				$hash = substr( md5( $matches[ 1 ] ), 0, $shardb_hash_length );
-				$partition = hexdec( $hash );
-				$table_blog_id = $matches[ 1 ];
+
+		$dataset = $shardb_dataset;
+		$hash = substr( md5( $matches[ 1 ] ), 0, $shardb_hash_length );
+		$partition = hexdec( $hash );
+		$table_blog_id = $matches[ 1 ];
 // VIP Blog Check.
 // Added by: Luke Poland
-                if ( is_array( $vip_db ) && array_key_exists( $table_blog_id, $vip_db ) ) {
-					$partition = $shardb_num_db + intval( $vip_db[ $table_blog_id ] );
-				}
+		if ( is_array( $vip_db ) && array_key_exists( $table_blog_id, $vip_db ) )
+			$partition = $shardb_num_db + intval( $vip_db[ $table_blog_id ] );
 // End VIP Addition
-			} else { // to come - other sharding structures
-				return false;
-			}
-		} else {
-			return false;
-		}
 		return compact( 'dataset', 'hash', 'partition' );
 	}
 
-	function get_dataset_from_table($table) {
-		if ( isset($this->db_tables[$table]) )
+	function get_dataset_from_table( $table ) {
+		if ( isset( $this->db_tables[$table] ) )
 			return $this->db_tables[$table];
 		foreach ( $this->db_tables as $pattern => $dataset ) {
 			if ( '/' == substr( $pattern, 0, 1 ) && preg_match( $pattern, $table ) ) 
@@ -602,9 +384,7 @@ class db {
 			$this->last_table = $table;
 			$partition = 0;
 
-/*			if ( is_array($this->db_tables) && $dataset = $this->get_dataset_from_table( $table ) ) {
-				$dbhname = $dataset;
-			} else */ if ( $ds_part = $this->get_ds_part_from_table($table) ) {
+			 if( ( $ds_part = $this->get_ds_part_from_table( $table ) ) ) {
 				extract( $ds_part, EXTR_OVERWRITE );
 				$dbhname = "{$dataset}_{$partition}";
 			} else {
@@ -619,7 +399,7 @@ class db {
 				$operation = 'read';
 			}
 
-			if ( isset( $this->dbhs[$dbhname] ) && is_resource($this->dbhs[$dbhname]) ) { // We're already connected!
+			if ( isset( $this->dbhs[$dbhname] ) && is_resource( $this->dbhs[$dbhname] ) ) { // We're already connected!
 				// Keep this connection at the top of the stack to prevent disconnecting frequently-used connections
 				if ( $k = array_search($dbhname, $this->open_connections) ) {
 					unset($this->open_connections[$k]);
@@ -637,9 +417,8 @@ class db {
 				}
 			}
 
-			if ( $write && defined( "MASTER_DB_DEAD" ) ) {
-				$this->bail("We're updating the database, please try back in 5 minutes. If you are posting to your blog please hit the refresh button on your browser in a few minutes to post the data again. It will be posted as soon as the database is back online again.");
-			}
+			if ( $write && defined( "MASTER_DB_DEAD" ) )
+				$this->bail("We're updating the database, please try back in 5 minutes. If you are posting to your site please hit the refresh button on your browser in a few minutes to post the data again. It will be posted as soon as the database is back online again.");
 
 			// Group eligible servers by R (plus 10,000 if remote)
 			$server_groups = array();
@@ -1166,14 +945,15 @@ class db {
 	 * @return false|void
 	 */
 	function bail($message) {
-		if ( !$this->show_errors ) {
-			if ( class_exists('WP_Error') )
-				$this->error = new WP_Error('500', $message);
-			else
-				$this->error = $message;
-			return false;
-		}
-		wp_die($message);
+		if ( $this->show_errors )
+			wp_die( $message );
+
+		if ( class_exists('WP_Error') )
+			$this->error = new WP_Error('500', $message);
+		else
+			$this->error = $message;
+
+		return false;
 	}
 
 	/**
@@ -1184,7 +964,7 @@ class db {
 		global $wp_version;
 		// Make sure the server has MySQL 4.0
 		$mysql_version = preg_replace( '|[^0-9\.]|', '', $this->db_version( $dbh_or_table ) );
-		if ( version_compare($mysql_version, '4.0.0', '<') )
+		if ( version_compare($mysql_version, '4.3.0', '<') )
 			return new WP_Error( 'database_version', sprintf(__('<strong>ERROR</strong>: WordPress %s requires MySQL 4.0.0 or higher'), $wp_version) );
 	}
 
@@ -1304,214 +1084,73 @@ class db {
 		$this->tcp_responsive = 'true';
 	        return true;
 	}
+	/* WP 3.0 */
+	function tables( $scope = 'all', $prefix = true, $blog_id = 0 ) {
+		$key = $scope . '_tables';
+		if( 'all' == $scope )
+			$tables = array_merge( $this->global_tables, $this->blog_tables );
+		elseif( isset( $this->$key ) )
+			$tables = $this->$key;
+		else
+			return array();
+
+		if ( !$prefix )
+			return $tables;
+
+		if ( ! $blog_id )
+			$blog_id = $this->blogid;
+
+		$blog_prefix = $this->get_blog_prefix( $blog_id );
+		$pre_tables = array();
+
+		foreach ( $tables as $table ) {
+			if ( in_array( $table, $this->global_tables ) )
+				$pre_tables[ $table ] = $this->base_prefix . $table;
+			else
+				$pre_tables[ $table ] = $blog_prefix . $table;
+		}
+
+		if ( isset( $tables['users'] ) ) {
+			if( defined( 'CUSTOM_USER_TABLE' ) )
+				$pre_tables['users'] = CUSTOM_USER_TABLE;
+			if ( defined( 'CUSTOM_USER_META_TABLE' ) )
+				$pre_tables['usermeta'] = CUSTOM_USER_META_TABLE;
+		}
+		return $pre_tables;
+	}
+	function get_blog_prefix( $blog_id = null ) {
+		return $this->base_prefix;
+	}
+	function set_prefix( $prefix, $set_table_names = true ) {
+
+		if ( preg_match( '|[^a-z0-9_]|i', $prefix ) )
+			return new WP_Error('invalid_db_prefix', /*WP_I18N_DB_BAD_PREFIX*/'Invalid database prefix'/*/WP_I18N_DB_BAD_PREFIX*/);
+
+		$old_prefix = $prefix;
+
+		if ( isset( $this->base_prefix ) )
+			$old_prefix = $this->base_prefix;
+
+		$this->base_prefix = $prefix;
+
+		if ( $set_table_names ) {
+			foreach ( $this->tables( 'all' ) as $table => $prefixed_table )
+				$this->$table = $prefixed_table;
+
+			$this->prefix = $this->get_blog_prefix();
+		}
+		return $old_prefix;
+	}
 } // class db
 endif;
 
-if ( defined( 'BACKPRESS_PATH' ) ) :
-class BPDB_Hyper extends db {
-	function BPDB_Hyper() {
-		$args = func_get_args();
-		return call_user_func_array( array(&$this, '__construct'), $args );
-	}
 
-	function __construct( $args ) { // no private _init method
-		if ( 4 == func_num_args() )
-			$args = array( 'user' => $args, 'password' => func_get_arg(1), 'name' => func_get_arg(2), 'host' => func_get_arg(3) );
-
-		$defaults = array(
-			'user' => false,
-			'password' => false,
-			'name' => false,
-			'host' => 'localhost',
-			'charset' => false,
-			'collate' => false,
-			'errors' => false
-		);
-
-		$args = wp_parse_args( $args, $defaults );
-
-		$hyper = array();
-
-		switch ( $args['errors'] ) :
-		case 'show' :
-			$hyper['show_errors'] = true;
-			break;
-		case 'suppress' :
-			$hyper['suppress_errors'] = true;
-			break;
-		endswitch;
-
-		if ( $args['name'] ) {
-			$hyper['db_server'] = array(
-				'user' => $args['user'],
-				'password' => $args['password'],
-				'name' => $args['name'],
-				'host' => $args['host']
-			);
-		}
-
-		$hyper['save_queries'] = (bool) @constant('SAVEQUERIES');
-
-		// HyperDB does not support per-table charsets, collations
-		foreach ( array( 'charset', 'collate' ) as $arg )
-			if ( isset($args[$arg]) )
-				$hyper[$arg] = $args[$arg];
-
-		return parent::__construct($hyper);
-	}
-
-	/**
-	 * Sets the prefix of the database tables
-	 * @param string prefix
-	 * @param false|array tables (optional: false)
-	 *	table identifiers are array keys
-	 *	array values
-	 *		empty: set prefix: array( 'posts' => false, 'users' => false, ... )
-	 *		string: set to that array value: array( 'posts' => 'my_posts', 'users' => 'my_users' )
-	 *		array: array[0] is DB identifier, array[1] is table name: array( 'posts' => array( 'global', 'my_posts' ), 'users' => array( 'users', 'my_users' ) )
-	 *	OR array values (with numeric keys): array( 'posts', 'users', ... )
-	 *
-	 * @return string the previous prefix (mostly only meaningful if all $table parameter was false)
-	 */
-	// Combines BPDB::set_prefix and BPDB_Multi::set_prefix
-	function set_prefix( $prefix, $tables = false ) {
-		if ( !$prefix )
-			return false;
-		if ( preg_match('|[^a-z0-9_]|i', $prefix) )
-			return new WP_Error('invalid_db_prefix', 'Invalid database prefix'); // No gettext here
-
-		$old_prefix = $this->prefix;
-
-		if ( $tables && is_array($tables) ) {
-			$_tables =& $tables;
-		} else {
-			$_tables =& $this->tables;
-			$this->prefix = $prefix;
-		}
-
-		foreach ( $_tables as $key => $value ) {
-			if ( is_numeric( $key ) ) { // array( 'posts', 'users', ... )
-				$this->$value = $prefix . $value;
-			} elseif ( !$value ) { // array( 'posts' => false, 'users' => false, ... )
-				$this->$key = $prefix . $key;
-			} elseif ( is_string($value) ) { // array( 'posts' => 'my_posts', 'users' => 'my_users' )
-				$this->$key = $value;
-			} elseif ( is_array($value) ) { // array( 'posts' => array( 'global', 'my_posts' ), 'users' => array( 'users', 'my_users' ) )
-				$this->add_db_table( $value[0], $value[1] );
-				$this->$key = $value[1];
-			}
-		}
-
-		return $old_prefix;
-	}
-
-	/**
-	 * Print SQL/DB error
-	 * @param string $str Error string
-	 */
-	function print_error($str = '') {
-		if ( $this->suppress_errors )
-			return false;
-
-		$error = $this->get_error( $str );
-		if ( is_object( $error ) && is_a( $error, 'WP_Error' ) ) {
-			$err = $error->get_error_data();
-			$err['error_str'] = sprintf( BPDB__ERROR_STRING, $err['str'], $err['query'], $err['caller'] );
-		} else {
-			$err =& $error;
-		}
-
-		$log_file = ini_get('error_log');
-		if ( !empty($log_file) && ('syslog' != $log_file) && !is_writable($log_file) && function_exists( 'error_log' ) )
-			error_log($err['error_str'], 0);
-
-		// Is error output turned on or not
-		if ( !$this->show_errors )
-			return false;
-
-		$str = htmlspecialchars($err['str'], ENT_QUOTES);
-		$query = htmlspecialchars($err['query'], ENT_QUOTES);
-		$caller = htmlspecialchars($err['caller'], ENT_QUOTES);
-
-		// If there is an error then take note of it
-		printf( BPDB__ERROR_HTML, $str, $query, $caller );
-	}
-
-	/**
-	 * Add a database server's information.  Does not automatically connect.
-	 * @param string $ds Dataset: the name of the dataset.
-	 * @param array $args
-	 *	ds  => string Dataset: the name of the dataset. Just use "global" if you don't need horizontal partitioning.
-	 *	part => string Partition: the vertical partition number (1, 2, 3, etc.). Use "0" if you don't need vertical partitioning.
-	 *	dc => string Datacenter: where the database server is located. Airport codes are convenient. Use whatever.
-	 *	read => int Read order: lower number means use this for more reads. Zero means no reads (e.g. for masters).
-	 *	write => int Write flag: is this server writable?
-	 *	host => string Internet address: host:port of server on internet. 
-	 *	lhost => string Local address: host:port of server for use when in same datacenter. Leave empty if no local address exists.
-	 *	name => string Database name.
-	 *	user => string Database user.
-	 *	password => string Database password.
-	 *	charset => string Database default charset.  Used in a SET NAMES query. (optional) (ignored)
-	 *	collate => string Database default collation.  If charset supplied, optionally added to the SET NAMES query (optional) (ignored)
-	 */
-	function add_db_server( $ds, $args = null ) {
-		$defaults = array(
-			'part' => 0,
-			'dc' => '',
-			'read' => 1,
-			'write' => 1,
-			'host' => 'localhost',
-			'lhost' => '',
-			'name' => false,
-			'user' => false,
-			'password' => false,
-			'charset' => false,
-			'collate' => false
-		);
-
-		// We're adding another DB so we're no longer single_db.  Put single_db data into db_servers
-		// during the load procedure, bbPress starts out single but may end up multi
-		// (at the moment, bbPress stores the multi info in the global "single" DB)
-		if ( $this->single_db ) {
-			$this->single_db = false;
-			$this->add_db_server( 'global', $this->db_server );
-			$this->db_server = array();
-			$this->dbhs['global'] =& $this->dbh;
-			$this->db_servers =& $GLOBALS['db_servers'];
-		}
-
-		extract( wp_parse_args( $args, $defaults ), EXTR_SKIP );
-
-		add_db_server( $ds, $part, $dc, $read, $write, $host, $lhost, $name, $user, $password );
-	}
-
-	/**
-	 * Maps a table to a dataset.
-	 * @param string $ds Dataset: the name of the dataset.
-	 * @param string $table
-	 */
-	function add_db_table( $ds, $table ) {
-		add_db_table( $ds, $table );
-		if ( empty( $this->db_tables ) )
-			$this->db_tables =& $GLOBALS['db_tables'];
-	}
-}
-
-// BackPress creates the DB object on its own.  Do not create one here
-
-else : // BackPress
-
-
-if ( !class_exists( 'wpdb' ) ) :
-if ( defined('WPMU') ) :
+if ( !class_exists( 'wpdb' ) && is_multisite() ) :
 class wpdb extends db {
 	var $prefix = '';
 	var $ready = true;
 	var $blogid = 0;
 	var $siteid = 0;
-	var $global_tables = array('blogs', 'signups', 'site', 'sitemeta', 'users', 'usermeta', 'sitecategories', 'registration_log', 'blog_versions');
-	var $blog_tables = array('posts', 'categories', 'post2cat', 'comments', 'commentmeta', 'links', 'link2cat', 'options',
-			'postmeta', 'terms', 'term_taxonomy', 'term_relationships');
 	var $blogs, $signups, $site, $sitemeta, $users, $usermeta, $sitecategories, $registration_log, $blog_versions, $posts, $categories, $post2cat, $comments, $links, $link2cat, $options, $postmeta, $terms, $term_taxonomy, $term_relationships;
 
 	function wpdb($dbuser, $dbpassword, $dbname, $dbhost) {
@@ -1546,54 +1185,53 @@ class wpdb extends db {
 		return parent::__construct($args);
 	}
 
-	function set_prefix($prefix) {
+	function set_prefix( $prefix, $set_table_names = true ) {
 
-		if ( preg_match('|[^a-z0-9_]|i', $prefix) )
+		if ( preg_match( '|[^a-z0-9_]|i', $prefix ) )
 			return new WP_Error('invalid_db_prefix', /*WP_I18N_DB_BAD_PREFIX*/'Invalid database prefix'/*/WP_I18N_DB_BAD_PREFIX*/);
 
-		$old_prefix = $this->base_prefix;
+		$old_prefix = '';
+		if ( isset( $this->base_prefix ) )
+			$old_prefix = $this->base_prefix;
+
 		$this->base_prefix = $prefix;
-		foreach ( $this->global_tables as $table )
-			$this->$table = $prefix . $table;
 
-		if ( empty($this->blogid) )
-			return $old_prefix;
+		if ( $set_table_names ) {
+			if( empty( $this->blogid ) )
+				$scope = 'global';
+			else
+				$scope = 'all';
 
-		$this->prefix = $this->get_blog_prefix( $this->blogid );
+			$this->prefix = $this->get_blog_prefix();
 
-		foreach ( $this->blog_tables as $table )
-			$this->$table = $this->prefix . $table;
-
-		if ( defined('CUSTOM_USER_TABLE') )
-			$this->users = CUSTOM_USER_TABLE;
-
-		if ( defined('CUSTOM_USER_META_TABLE') )
-			$this->usermeta = CUSTOM_USER_META_TABLE;
-
+			foreach ( $this->tables( $scope ) as $table => $prefixed_table )
+				$this->$table = $prefixed_table;
+		}
 		return $old_prefix;
 	}
 
-	function set_blog_id($blog_id, $site_id = '') {
-		if ( !empty($site_id) )
+	function set_blog_id( $blog_id, $site_id = 0 ) {
+		if ( ! empty( $site_id ) )
 			$this->siteid = $site_id;
 
-		$old_blog_id = $this->blogid;
+		$old_blog_id  = $this->blogid;
 		$this->blogid = $blog_id;
 
-		$this->prefix = $this->get_blog_prefix( $this->blogid );
+		$this->prefix = $this->get_blog_prefix();
 
-		foreach ( $this->blog_tables as $table )
-			$this->$table = $this->prefix . $table;
+		foreach ( $this->tables( 'site' ) as $table => $prefixed_table )
+			$this->$table = $prefixed_table;
 
 		return $old_blog_id;
 	}
 
-	function get_blog_prefix( $blog_id = '' ) {
-		if ( $blog_id ) {
-			return $this->base_prefix . $blog_id . '_';
-		} else {
-			return $this->prefix;
-		}
+	function get_blog_prefix( $blog_id = null ) {
+		if ( null === $blog_id )
+			$blog_id = $this->blogid;
+		if ( defined( 'MULTISITE' ) && ( 0 == $blog_id || 1 == $blog_id ) )
+			return $this->base_prefix;
+
+		return $this->base_prefix . $blog_id . '_';
 	}
 
 	function print_error($str = '') {
@@ -1632,109 +1270,9 @@ class wpdb extends db {
 		if( defined( 'DIEONDBERROR' ) )
 			die( $msg );
 	}
-}
-else :
-class wpdb extends db {
-	var $prefix = '';
-	var $tables = array('users', 'usermeta', 'posts', 'categories', 'post2cat', 'comments', 'links', 'link2cat', 'options',
-			'postmeta', 'terms', 'term_taxonomy', 'term_relationships');
-	var $users, $usermeta, $posts, $categories, $post2cat, $comments, $links, $link2cat, $options, $postmeta, $terms, $term_taxonomy, $term_relationships;
-
-	var $ready = true;
-
-	function wpdb($dbuser, $dbpassword, $dbname, $dbhost) {
-		return $this->__construct($dbuser, $dbpassword, $dbname, $dbhost);
-	}
-
-	function __construct($dbuser, $dbpassword, $dbname, $dbhost) {
-		$args = array();
-
-		if ( defined('WP_DEBUG') and WP_DEBUG == true )
-			$args['show_errors'] = true;
-
-		if ( defined('DB_CHARSET') )
-			$args['charset'] = DB_CHARSET;
-
-		if ( defined('DB_COLLATE') )
-			$args['collate'] = DB_COLLATE;
-
-		$args['save_queries'] = (bool) constant('SAVEQUERIES');
-
-		$args['db_server'] = array(
-			'user'     => $dbuser,
-			'password' => $dbpassword,
-			'name'     => $dbname,
-			'host'     => $dbhost
-		);
-
-		return parent::__construct($args);
-	}
-
-	function set_prefix($prefix) {
-		if ( preg_match('|[^a-z0-9_]|i', $prefix) )
-			return new WP_Error('invalid_db_prefix', 'Invalid database prefix'); // No gettext here
-
-		$old_prefix = $this->prefix;
-		$this->prefix = $prefix;
-
-		foreach ( $this->tables as $table )
-			$this->$table = $this->prefix . $table;
-
-		if ( defined('CUSTOM_USER_TABLE') )
-			$this->users = CUSTOM_USER_TABLE;
-
-		if ( defined('CUSTOM_USER_META_TABLE') )
-			$this->usermeta = CUSTOM_USER_META_TABLE;
-
-		return $old_prefix;
-	}
-
-	function print_error($str = '') {
-		global $EZSQL_ERROR;
-
-		if (!$str) $str = mysql_error($this->dbh);
-		$EZSQL_ERROR[] = array ('query' => $this->last_query, 'error_str' => $str);
-
-		if ( $this->suppress_errors )
-			return false;
-
-		if ( $caller = $this->get_caller() )
-			$error_str = sprintf(/*WP_I18N_DB_QUERY_ERROR_FULL*/'WordPress database error %1$s for query %2$s made by %3$s'/*/WP_I18N_DB_QUERY_ERROR_FULL*/, $str, $this->last_query, $caller);
-		else
-			$error_str = sprintf(/*WP_I18N_DB_QUERY_ERROR*/'WordPress database error %1$s for query %2$s'/*/WP_I18N_DB_QUERY_ERROR*/, $str, $this->last_query);
-
-		$log_error = true;
-		if ( ! function_exists('error_log') )
-			$log_error = false;
-
-		$log_file = @ini_get('error_log');
-		if ( !empty($log_file) && ('syslog' != $log_file) && !is_writable($log_file) )
-			$log_error = false;
-
-		if ( $log_error )
-			@error_log($error_str, 0);
-
-		// Is error output turned on or not..
-		if ( !$this->show_errors )
-			return false;
-
-		$str = htmlspecialchars($str, ENT_QUOTES);
-		$query = htmlspecialchars($this->last_query, ENT_QUOTES);
-
-		// If there is an error then take note of it
-		print "<div id='error'>
-		<p class='wpdberror'><strong>WordPress database error:</strong> [$str]<br />
-		<code>$query</code></p>
-		</div>";
-	}
 } // class wpdb
-endif;
-endif;
 
-// WordPress and WordPress MU do not create their own DB object.  Create one here.
-if ( ! isset($wpdb) )
-	$wpdb = new wpdb(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST);
-
-endif; // BackPress
+$wpdb = new wpdb(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST);
+endif;
 
 ?>

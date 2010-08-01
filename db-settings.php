@@ -7,7 +7,7 @@ define( 'DATACENTER', '' );
 
 function add_slave($read, $host, $lhost = '', $user = DB_USER, $password = DB_PASSWORD) {
 	global $slaves;
-	$slaves[] = compact('read', 'host', 'lhost', 'name', 'user', 'password');
+	$slaves[] = compact('read', 'host', 'lhost', 'user', 'password');
 }
 
 /* Add your configuration here */

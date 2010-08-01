@@ -3,7 +3,7 @@
 Plugin Name: SharDB site admin utilities for WordPress MU 
 Plugin URI: http://wpmututorials.com/plugins/shardb/
 Description: A Multi-database plugin for WordPress MU
-Version: 2.7.3
+Version: 2.7.4
 Author: Ron Rennick
 Author URI: http://ronandandrea.com/
 Donate link: http://wpmututorials.com/
@@ -15,19 +15,17 @@ Donate link: http://wpmututorials.com/
 function shardb_get_ds_part_from_blog_id( $blog_id ) {
 	global $shardb_hash_length, $shardb_dataset, $shardb_num_db, $vip_db, $shardb_prefix;
 	
-	if( isset( $shardb_hash_length ) ) {
-		$dataset = $shardb_dataset; 
-		$hash = substr( md5( $blog_id ), 0, $shardb_hash_length );
-		$partition = hexdec( $hash );
+	if( !isset( $shardb_hash_length ) ) 
+		return false;
+
+	$dataset = $shardb_dataset; 
+	$hash = substr( md5( $blog_id ), 0, $shardb_hash_length );
+	$partition = hexdec( $hash );
 // VIP Blog Check.
 // Added by: Luke Poland
-		if ( is_array( $vip_db ) && array_key_exists( $blog_id, $vip_db ) ) {
-			$partition = $shardb_num_db + intval( $vip_db[ $blog_id ] );
-		}
+	if ( is_array( $vip_db ) && array_key_exists( $blog_id, $vip_db ) )
+		$partition = $shardb_num_db + intval( $vip_db[ $blog_id ] );
 // End VIP Addition
-	} else { // to come - other sharding structures
-		return false;
-	}
 	return compact( 'dataset', 'hash', 'partition' );
 }
 
