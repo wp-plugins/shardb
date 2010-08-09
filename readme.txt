@@ -25,7 +25,7 @@ This plugin is based on [HyperDB](http://wordpress.org/extend/plugins/hyperdb) w
 	3. your blog shard databases are named according to the same prefix and a suffix of md5 hash, home or vipX.
 2. Instructions for adding VIP databases are at the bottom of db-settings.php.
 3. Once finished editing db-setting.php upload it to the web root of your WPMU install.
-4. Edit your wp-config.php and add the following 2 lines after the database settings are defined:
+4. Edit your wp-config.php and add the following line after the database settings are defined:
 	require_once('db-settings.php');
 5. upload db.php to /wp-content/.
 6. upload shardb-admin.php to /wp-content/mu-plugins/.
