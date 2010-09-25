@@ -6,42 +6,18 @@ if( !function_exists( 'is_multisite' ) ) {
 	function is_multisite() { return true; }
 }
 
-define('OBJECT', 'OBJECT', true);
-define('OBJECT_K', 'OBJECT_K', false);
-define('ARRAY_K', 'ARRAY_K', false);
-define('ARRAY_A', 'ARRAY_A', false);
-define('ARRAY_N', 'ARRAY_N', false);
+if( !class_exists( 'wpdb' ) ) {
+	$wpdb = true;
+	require( ABSPATH . WPINC . '/wp-db.php' );
+}
 
-if (!defined('SAVEQUERIES'))
-	define('SAVEQUERIES', false);
 
-if ( !class_exists('db') ) :
-class db {
-	/* Update for WP 3.0 */
-	var $blog_tables = array( 'posts', 'comments', 'links', 'options', 'postmeta', 'terms', 'term_taxonomy', 'term_relationships', 'commentmeta' );
-	var $user_tables = array( 'users', 'usermeta' );
-	var $old_tables = array( 'categories', 'post2cat', 'link2cat' );
-	var $ms_global_tables = array( 'blogs', 'signups', 'site', 'sitemeta', 'sitecategories', 'registration_log', 'blog_versions' );
-	var $global_tables = false;
+if ( is_multisite() ) :
+class SharDB extends wpdb {
+	var $ready = true;
 	var $site_tables = false;
-
-	var $show_errors = false;
-	var $suppress_errors = false;
-	var $last_error;
-
-	var $num_queries = 0;
-	var $last_query;
-	var $last_table;
-	var $last_found_rows_result;
-	var $col_info;
-	
-	var $queries = array();
-	var $field_types = array();
-	var $save_queries = false;
-
-	var $charset;
-	var $collate;
-	var $real_escape = false;
+	var $blog_tables = false;
+	var $all_tables = false;
 
 	var $dbh;
 	var $dbhs;
@@ -60,15 +36,28 @@ class db {
 	var $used_servers = array();
 	var $written_servers = array();
 
-	function db( $args = array() ) {
-		return $this->__construct( $args );
+	function SharDB($dbuser, $dbpassword, $dbname, $dbhost) {
+		return $this->__construct($dbuser, $dbpassword, $dbname, $dbhost);
 	}
 
-	function __construct( $args = null ) {
-		if ( is_array( $args ) )
-			foreach ( get_class_vars(__CLASS__) as $var => $value )
-				if ( isset( $args[$var] ) )
-					$this->$var = $args[$var];
+	function __construct($dbuser, $dbpassword, $dbname, $dbhost) {
+		register_shutdown_function( array( &$this, '__destruct' ) );
+
+		if ( defined('WP_DEBUG') and WP_DEBUG == true )
+			$this->show_errors = true;
+
+		if ( defined('DB_CHARSET') )
+			$this->charset = DB_CHARSET;
+		else
+			$this->charset = 'utf8';
+
+		if ( defined('DB_COLLATE') )
+			$this->collate = DB_COLLATE;
+		elseif ( $this->charset == 'utf8' )
+			$this->collate = 'utf8_general_ci';
+
+		$this->save_queries = (bool) constant('SAVEQUERIES');
+
 		if ( !$this->single_db ) {
 			if ( empty( $this->db_servers ) && isset( $GLOBALS['db_servers'] ) && is_array( $GLOBALS['db_servers'] ) )
 				$this->db_servers =& $GLOBALS['db_servers'];
@@ -81,166 +70,17 @@ class db {
 			else
 				$this->single_db = true;
 		}
+		$this->user_tables = $this->global_tables;
 		if( is_multisite() )
 			$this->global_tables = array_merge( $this->user_tables, $this->ms_global_tables );
-		else
-			$this->global_tables = $this->user_tables;
-		
+
+		$this->blog_tables = $this->tables;
 		$this->site_tables = array_merge( $this->blog_tables, $this->old_tables );
-	}
-	/*
-	 * weak & strong escaping functions
-	 */
-	function _weak_escape( $string ) {
-		return addslashes( $string );
-	}
-
-	function _real_escape( $string ) {
-		if ( $this->dbh && $this->real_escape )
-			return mysql_real_escape_string( $string, $this->dbh );
-		else
-			return addslashes( $string );
-	}
-
-	function _escape( $data ) {
-		return is_array( $data ) ? array_map( array( &$this, '_escape' ), $data ) : $this->_real_escape( $data );
-	}
-
-	function escape( $data ) {
-		return is_array( $data ) ? array_map( array( &$this, 'escape' ), $data ) : $this->_weak_escape( $data );
-	}
-
-	function escape_by_ref( &$string ) {
-		$string = $this->_real_escape( $string );
-	}
-
-	function escape_deep( $data ) {
-		return is_array( $data ) ? array_map( array( &$this, 'escape_deep' ), $data ) : $this->escape( $data );
-	}
-
-	/**
-	 * Prepares a SQL query for safe execution.  Uses sprintf()-like syntax.
-	 *
-	 * This function only supports a small subset of the sprintf syntax; it only supports %d (decimal number), %s (string).
-	 * Does not support sign, padding, alignment, width or precision specifiers.
-	 * Does not support argument numbering/swapping.
-	 *
-	 * May be called like {@link http://php.net/sprintf sprintf()} or like {@link http://php.net/vsprintf vsprintf()}.
-	 *
-	 * Both %d and %s should be left unquoted in the query string.
-	 *
-	 * <code>
-	 * wpdb::prepare( "SELECT * FROM `table` WHERE `column` = %s AND `field` = %d", "foo", 1337 )
-	 * </code>
-	 *
-	 * @link http://php.net/sprintf Description of syntax.
-	 * @since 2.3.0
-	 *
-	 * @param string $query Query statement with sprintf()-like placeholders
-	 * @param array|mixed $args The array of variables to substitute into the query's placeholders if being called like {@link http://php.net/vsprintf vsprintf()}, or the first variable to substitute into the query's placeholders if being called like {@link http://php.net/sprintf sprintf()}.
-	 * @param mixed $args,... further variables to substitute into the query's placeholders if being called like {@link http://php.net/sprintf sprintf()}.
-	 * @return null|string Sanitized query string
-	 */
-	function prepare( $query = null ) { // ( $query, *$args )
-		if ( is_null( $query ) )
-			return;
-		$args = func_get_args();
-		array_shift($args);
-		// If args were passed as an array (as in vsprintf), move them up
-		if ( isset($args[0]) && is_array($args[0]) )
-			$args = $args[0];
-		$query = str_replace("'%s'", '%s', $query); // in case someone mistakenly already singlequoted it
-		$query = str_replace('"%s"', '%s', $query); // doublequote unquoting
-		$query = str_replace('%s', "'%s'", $query); // quote the strings
-		array_walk($args, array(&$this, 'escape_by_ref'));
-		return @vsprintf($query, $args);
-	}
-
-	/**
-	 * Get SQL/DB error
-	 * @param string $str Error string
-	 */
-	function get_error( $str = '' ) {
-		if ( empty($str) ) {
-			if ( $this->last_error )
-				$str = $this->last_error;
-			else
-				return false;
-		}
-
-		$error_str = "WordPress database error $str for query $this->last_query";
-
-		if ( $caller = $this->get_caller() )
-			$error_str .= " made by $caller";
-
-		if ( class_exists( 'WP_Error' ) )
-			return new WP_Error( 'db_query', $error_str, array( 'query' => $this->last_query, 'error' => $str, 'caller' => $caller ) );
-		else
-			return array( 'query' => $this->last_query, 'error' => $str, 'caller' => $caller, 'error_str' => $error_str );
-	}
-
-	/**
-	 * Print SQL/DB error
-	 * @param string $str Error string
-	 */
-	function print_error($str = '') {
-		if ( $this->suppress_errors )
-			return false;
-
-		$error = $this->get_error( $str );
-		if ( is_object( $error ) && is_a( $error, 'WP_Error' ) ) {
-			$err = $error->get_error_data();
-			$err['error_str'] = $error->get_error_message();
-		} else {
-			$err =& $error;
-		}
-
-		$log_file = ini_get('error_log');
-		if ( !empty($log_file) && ('syslog' != $log_file) && !is_writable($log_file) && function_exists( 'error_log' ) )
-			error_log($err['error_str'], 0);
-
-		// Is error output turned on or not
-		if ( !$this->show_errors )
-			return false;
-
-		$str = htmlspecialchars($err['str'], ENT_QUOTES);
-		$query = htmlspecialchars($err['query'], ENT_QUOTES);
-
-		// If there is an error then take note of it
-		print "<div id='error'>
-		<p class='dberror'><strong>Database error:</strong> [$str]<br />
-		<code>$query</code></p>
-		</div>";
-	}
-
-	/**
-	 * Turn error output on or off
-	 * @param bool $show
-	 * @return bool previous setting
-	 */
-	function show_errors( $show = true ) {
-		$errors = $this->show_errors;
-		$this->show_errors = $show;
-		return $errors;
-	}
-
-	/**
-	 * Turn error output off
-	 * @return bool previous setting of show_errors
-	 */
-	function hide_errors() {
-		return $this->show_errors( false );
-	}
-
-	/**
-	 * Turn error logging on or off
-	 * @param bool $suppress
-	 * @return bool previous setting
-	 */
-	function suppress_errors( $suppress = true ) {
-		$errors = $this->suppress_errors;
-		$this->suppress_errors = $suppress;
-		return $errors;
+		$this->all_tables = array_merge( $this->global_tables, $this->site_tables );
+		$this->dbuser = $dbuser;
+		$this->dbpassword = $dbpassword;
+		$this->dbname = $dbname;
+		$this->dbhost = $dbhost;
 	}
 
 	/**
@@ -460,9 +300,12 @@ class db {
 				$this->timer_start();
 
 				// make sure there's always a port #
-				list($host, $port) = explode(':', $server['host']);
-				if ( empty($port) )
+				if( strpos( $server['host'], ':' ) !== false )
+					list($host, $port) = explode(':', $server['host']);
+				else {
+					$host = $server['host'];
 					$port = 3306;
+				}
 
 				// reduce the timeout if the host is on the lan
 				$mctime = 0.2; // Default
@@ -532,9 +375,6 @@ class db {
 
 			// Close current and prevent future read-only connections to the written cluster
 			if ( $write ) {
-				if ( isset($db_clusters[$clustername]['read']) )
-					unset( $db_clusters[$clustername]['read'] );
-
 				if ( is_resource($this->dbhs[$read_dbh]) && $this->dbhs[$read_dbh] != $this->dbhs[$dbhname] )
 					$this->disconnect( $read_dbh );
 
@@ -565,19 +405,6 @@ class db {
 
 		unset($this->dbhs[$dbhname]);
 	}
-
-	/**
-	 * Kill cached query results
-	 */
-	function flush() {
-		$this->last_result = array();
-		$this->col_info = null;
-		$this->last_query = null;
-		$this->last_error = '';
-		$this->last_table = '';
-		$this->num_rows = 0;
-	}
-
 	/**
 	 * Basic query. See docs for more details.
 	 * @param string $query
@@ -662,392 +489,6 @@ class db {
 
 		return $return_val;
 	}
-
-	/**
-	 * Insert a row into a table.
-	 *
-	 * <code>
-	 * wpdb::insert( 'table', array( 'column' => 'foo', 'field' => 1337 ), array( '%s', '%d' ) )
-	 * </code>
-	 *
-	 * @since 2.5.0
-	 * @see wpdb::prepare()
-	 *
-	 * @param string $table table name
-	 * @param array $data Data to insert (in column => value pairs).  Both $data columns and $data values should be "raw" (neither should be SQL escaped).
-	 * @param array|string $format (optional) An array of formats to be mapped to each of the value in $data.  If string, that format will be used for all of the values in $data.  A format is one of '%d', '%s' (decimal number, string).  If omitted, all values in $data will be treated as strings.
-	 * @return int|false The number of rows inserted, or false on error.
-	 */
-	function insert($table, $data, $format = null) {
-		$formats = $format = (array) $format;
-		$fields = array_keys($data);
-		$formatted_fields = array();
-		foreach ( $fields as $field ) {
-			if ( !empty($format) )
-				$form = ( $form = array_shift($formats) ) ? $form : $format[0];
-			elseif ( isset($this->field_types[$field]) )
-				$form = $this->field_types[$field];
-			else
-				$form = '%s';
-			$formatted_fields[] = $form;
-		}
-		$sql = "INSERT INTO `$table` (`" . implode( '`,`', $fields ) . "`) VALUES ('" . implode( "','", $formatted_fields ) . "')";
-		return $this->query( $this->prepare( $sql, $data) );
-	}
-
-
-	/**
-	 * Update a row in the table
-	 *
-	 * <code>
-	 * wpdb::update( 'table', array( 'column' => 'foo', 'field' => 1337 ), array( 'ID' => 1 ), array( '%s', '%d' ), array( '%d' ) )
-	 * </code>
-	 *
-	 * @since 2.5.0
-	 * @see wpdb::prepare()
-	 *
-	 * @param string $table table name
-	 * @param array $data Data to update (in column => value pairs).  Both $data columns and $data values should be "raw" (neither should be SQL escaped).
-	 * @param array $where A named array of WHERE clauses (in column => value pairs).  Multiple clauses will be joined with ANDs.  Both $where columns and $where values should be "raw".
-	 * @param array|string $format (optional) An array of formats to be mapped to each of the values in $data.  If string, that format will be used for all of the values in $data.  A format is one of '%d', '%s' (decimal number, string).  If omitted, all values in $data will be treated as strings.
-	 * @param array|string $format_where (optional) An array of formats to be mapped to each of the values in $where.  If string, that format will be used for all of  the items in $where.  A format is one of '%d', '%s' (decimal number, string).  If omitted, all values in $where will be treated as strings.
-	 * @return int|false The number of rows updated, or false on error.
-	 */
-	function update($table, $data, $where, $format = null, $where_format = null) {
-		if ( !is_array( $where ) )
-			return false;
-
-		$formats = $format = (array) $format;
-		$bits = $wheres = array();
-		foreach ( (array) array_keys($data) as $field ) {
-			if ( !empty($format) )
-				$form = ( $form = array_shift($formats) ) ? $form : $format[0];
-			elseif ( isset($this->field_types[$field]) )
-				$form = $this->field_types[$field];
-			else
-				$form = '%s';
-			$bits[] = "`$field` = {$form}";
-		}
-
-		$where_formats = $where_format = (array) $where_format;
-		foreach ( (array) array_keys($where) as $field ) {
-			if ( !empty($where_format) )
-				$form = ( $form = array_shift($where_formats) ) ? $form : $where_format[0];
-			elseif ( isset($this->field_types[$field]) )
-				$form = $this->field_types[$field];
-			else
-				$form = '%s';
-			$wheres[] = "`$field` = {$form}";
-		}
-
-		$sql = "UPDATE `$table` SET " . implode( ', ', $bits ) . ' WHERE ' . implode( ' AND ', $wheres );
-		return $this->query( $this->prepare( $sql, array_merge(array_values($data), array_values($where))) );
-	}
-
-	/**
-	 * Retrieve one variable from the database.
-	 *
-	 * Executes a SQL query and returns the value from the SQL result.
-	 * If the SQL result contains more than one column and/or more than one row, this function returns the value in the column and row specified.
-	 * If $query is null, this function returns the value in the specified column and row from the previous SQL result.
-	 *
-	 * @since 0.71
-	 *
-	 * @param string|null $query SQL query.  If null, use the result from the previous query.
-	 * @param int $x (optional) Column of value to return.  Indexed from 0.
-	 * @param int $y (optional) Row of value to return.  Indexed from 0.
-	 * @return string Database query result
-	 */
-	function get_var($query=null, $x = 0, $y = 0) {
-		$this->func_call = "\$db->get_var(\"$query\",$x,$y)";
-		if ( $query )
-			$this->query($query);
-
-		// Extract var out of cached results based x,y vals
-		if ( !empty( $this->last_result[$y] ) ) {
-			$values = array_values(get_object_vars($this->last_result[$y]));
-		}
-
-		// If there is a value return it else return null
-		return (isset($values[$x]) && $values[$x]!=='') ? $values[$x] : null;
-	}
-
-	/**
-	 * Retrieve one row from the database.
-	 *
-	 * Executes a SQL query and returns the row from the SQL result.
-	 *
-	 * @since 0.71
-	 *
-	 * @param string|null $query SQL query.
-	 * @param string $output (optional) one of ARRAY_A | ARRAY_N | OBJECT constants.  Return an associative array (column => value, ...), a numerically indexed array (0 => value, ...) or an object ( ->column = value ), respectively.
-	 * @param int $y (optional) Row to return.  Indexed from 0.
-	 * @return mixed Database query result in format specifed by $output
-	 */
-	function get_row($query = null, $output = OBJECT, $y = 0) {
-		$this->func_call = "\$db->get_row(\"$query\",$output,$y)";
-		if ( $query )
-			$this->query($query);
-		else
-			return null;
-
-		if ( !isset($this->last_result[$y]) )
-			return null;
-
-		if ( $output == OBJECT ) {
-			return $this->last_result[$y] ? $this->last_result[$y] : null;
-		} elseif ( $output == ARRAY_A ) {
-			return $this->last_result[$y] ? get_object_vars($this->last_result[$y]) : null;
-		} elseif ( $output == ARRAY_N ) {
-			return $this->last_result[$y] ? array_values(get_object_vars($this->last_result[$y])) : null;
-		} else {
-			$this->print_error(/*WP_I18N_DB_GETROW_ERROR*/" \$db->get_row(string query, output type, int offset) -- Output type must be one of: OBJECT, ARRAY_A, ARRAY_N"/*/WP_I18N_DB_GETROW_ERROR*/);
-		}
-	}
-
-	/**
-	 * Retrieve one column from the database.
-	 *
-	 * Executes a SQL query and returns the column from the SQL result.
-	 * If the SQL result contains more than one column, this function returns the column specified.
-	 * If $query is null, this function returns the specified column from the previous SQL result.
-	 *
-	 * @since 0.71
-	 *
-	 * @param string|null $query SQL query.  If null, use the result from the previous query.
-	 * @param int $x Column to return.  Indexed from 0.
-	 * @return array Database query result.  Array indexed from 0 by SQL result row number.
-	 */
-	function get_col($query = null , $x = 0) {
-		if ( $query )
-			$this->query($query);
-
-		$new_array = array();
-		// Extract the column values
-		for ( $i=0; $i < count($this->last_result); $i++ ) {
-			$new_array[$i] = $this->get_var(null, $x, $i);
-		}
-		return $new_array;
-	}
-
-	/**
-	 * Retrieve an entire SQL result set from the database (i.e., many rows)
-	 *
-	 * Executes a SQL query and returns the entire SQL result.
-	 *
-	 * @since 0.71
-	 *
-	 * @param string $query SQL query.
-	 * @param string $output (optional) ane of ARRAY_A | ARRAY_N | ARRAY_K | OBJECT | OBJECT_K constants.  With one of the first three, return an array of rows indexed from 0 by SQL result row number.  Each row is an associative array (column => value, ...), a numerically indexed array (0 => value, ...), or an object. ( ->column = value ), respectively.  With OBJECT_K, return an associative array of row objects keyed by the value of each row's first column's value.  Duplicate keys are discarded.
-	 * @return mixed Database query results
-	 */
-	function get_results($query = null, $output = OBJECT) {
-		$this->func_call = "\$db->get_results(\"$query\", $output)";
-
-		if ( $query )
-			$this->query($query);
-		else
-			return null;
-
-		if ( $output == OBJECT ) {
-			// Return an integer-keyed array of row objects
-			return $this->last_result;
-		} elseif ( $output == OBJECT_K || $output == ARRAY_K ) {
-			// Return an array of row objects with keys from column 1
-			// (Duplicates are discarded)
-			$key = $this->col_info[0]->name;
-			foreach ( (array) $this->last_result as $row )
-				if ( !isset( $new_array[ $row->$key ] ) )
-					$new_array[ $row->$key ] = $row;
-			if ( $output == ARRAY_K )
-				return array_map('get_object_vars', $new_array);
-			return $new_array;
-		} elseif ( $output == ARRAY_A || $output == ARRAY_N ) {
-			// Return an integer-keyed array of...
-			if ( $this->last_result ) {
-				$i = 0;
-				foreach( (array) $this->last_result as $row ) {
-					if ( $output == ARRAY_N ) {
-						// ...integer-keyed row arrays
-						$new_array[$i] = array_values( get_object_vars( $row ) );
-					} else {
-						// ...column name-keyed row arrays
-						$new_array[$i] = get_object_vars( $row );
-					}
-					++$i;
-				}
-				return $new_array;
-			}
-		}
-	}
-
-	/**
-	 * Retrieve column metadata from the last query.
-	 *
-	 * @since 0.71
-	 *
-	 * @param string $info_type one of name, table, def, max_length, not_null, primary_key, multiple_key, unique_key, numeric, blob, type, unsigned, zerofill
-	 * @param int $col_offset 0: col name. 1: which table the col's in. 2: col's max length. 3: if the col is numeric. 4: col's type
-	 * @return mixed Column Results
-	 */
-	function get_col_info($info_type = 'name', $col_offset = -1) {
-		if ( $this->col_info ) {
-			if ( $col_offset == -1 ) {
-				$i = 0;
-				foreach( (array) $this->col_info as $col ) {
-					$new_array[$i] = $col->{$info_type};
-					$i++;
-				}
-				return $new_array;
-			} else {
-				return $this->col_info[$col_offset]->{$info_type};
-			}
-		}
-	}
-
-	/**
-	 * Starts the timer, for debugging purposes.
-	 *
-	 * @since 1.5.0
-	 *
-	 * @return true
-	 */
-	function timer_start() {
-		$mtime = microtime();
-		$mtime = explode(' ', $mtime);
-		$this->time_start = $mtime[1] + $mtime[0];
-		return true;
-	}
-
-	/**
-	 * Stops the debugging timer.
-	 *
-	 * @since 1.5.0
-	 *
-	 * @return int Total time spent on the query, in milliseconds
-	 */
-	function timer_stop() {
-		$mtime = microtime();
-		$mtime = explode(' ', $mtime);
-		$time_end = $mtime[1] + $mtime[0];
-		$time_total = $time_end - $this->time_start;
-		return $time_total;
-	}
-
-	/**
-	 * Wraps errors in a nice header and footer and dies.
-	 *
-	 * Will not die if wpdb::$show_errors is true
-	 *
-	 * @since 1.5.0
-	 *
-	 * @param string $message
-	 * @return false|void
-	 */
-	function bail($message) {
-		if ( $this->show_errors )
-			wp_die( $message );
-
-		if ( class_exists('WP_Error') )
-			$this->error = new WP_Error('500', $message);
-		else
-			$this->error = $message;
-
-		return false;
-	}
-
-	/**
-	 * Checks wether of not the database version is high enough to support the features WordPress uses
-	 * @global $wp_version
-	 */
-	function check_database_version( $dbh_or_table = false ) {
-		global $wp_version;
-		// Make sure the server has MySQL 4.0
-		$mysql_version = preg_replace( '|[^0-9\.]|', '', $this->db_version( $dbh_or_table ) );
-		if ( version_compare($mysql_version, '4.3.0', '<') )
-			return new WP_Error( 'database_version', sprintf(__('<strong>ERROR</strong>: WordPress %s requires MySQL 4.0.0 or higher'), $wp_version) );
-	}
-
-	/**
-	 * This function is called when WordPress is generating the table schema to determine wether or not the current database
-	 * supports or needs the collation statements.
-	 * @return bool
-	 */
-	function supports_collation() {
-		return $this->has_cap( 'collation' );
-	}
-
-	/**
-	 * Generic function to determine if a database supports a particular feature
-	 * @param string $db_cap the feature
-	 * @param false|string|resource $dbh_or_table the databaese (the current database, the database housing the specified table, or the database of the mysql resource)
-	 * @return bool
-	 */
-	function has_cap( $db_cap, $dbh_or_table = false ) {
-		$version = $this->db_version( $dbh_or_table );
-
-		switch ( strtolower( $db_cap ) ) :
-		case 'collation' :
-		case 'group_concat' :
-		case 'subqueries' :
-			return version_compare($version, '4.1', '>=');
-			break;
-		endswitch;
-
-		return false;
-	}
-
-	/**
-	 * The database version number
-	 * @param false|string|resource $dbh_or_table the databaese (the current database, the database housing the specified table, or the database of the mysql resource)
-	 * @return false|string false on failure, version number on success
-	 */
-	function db_version( $dbh_or_table = false ) {
-		if ( !$dbh_or_table && $this->dbh )
-			$dbh =& $this->dbh;
-		elseif ( is_resource( $dbh_or_table ) )
-			$dbh =& $dbh_or_table;
-		else
-			$dbh = $this->db_connect( "SELECT FROM $dbh_or_table $this->users" );
-
-		if ( $dbh )
-			return preg_replace('/[^0-9.].*/', '', mysql_get_server_info( $dbh ));
-		return false;
-	}
-
-	/**
-	 * Get the name of the function that called wpdb.
-	 * @return string the name of the calling function
-	 */
-	function get_caller() {
-		// requires PHP 4.3+
-		if ( !is_callable('debug_backtrace') )
-			return '';
-
-		$bt = debug_backtrace();
-		$caller = '';
-
-		foreach ( (array) $bt as $trace ) {
-			if ( isset($trace['class']) && is_a( $this, $trace['class'] ) )
-				continue;
-			elseif ( !isset($trace['function']) )
-				continue;
-			elseif ( strtolower($trace['function']) == 'call_user_func_array' )
-				continue;
-			elseif ( strtolower($trace['function']) == 'apply_filters' )
-				continue;
-			elseif ( strtolower($trace['function']) == 'do_action' )
-				continue;
-
-			if ( isset($trace['class']) )
-				$caller = $trace['class'] . '::' . $trace['function'];
-			else
-				$caller = $trace['function'];
-			break;
-		}
-		return $caller;
-	}
-
 	/**
 	 * Check the responsiveness of a tcp/ip daemon
 	 * @return (bool) true when $host:$post responds within $float_timeout seconds, else (bool) false
@@ -1083,106 +524,6 @@ class db {
 			apc_store($apc_key, 'up', $apc_ttl);
 		$this->tcp_responsive = 'true';
 	        return true;
-	}
-	/* WP 3.0 */
-	function tables( $scope = 'all', $prefix = true, $blog_id = 0 ) {
-		$key = $scope . '_tables';
-		if( 'all' == $scope )
-			$tables = array_merge( $this->global_tables, $this->blog_tables );
-		elseif( isset( $this->$key ) )
-			$tables = $this->$key;
-		else
-			return array();
-
-		if ( !$prefix )
-			return $tables;
-
-		if ( ! $blog_id )
-			$blog_id = $this->blogid;
-
-		$blog_prefix = $this->get_blog_prefix( $blog_id );
-		$pre_tables = array();
-
-		foreach ( $tables as $table ) {
-			if ( in_array( $table, $this->global_tables ) )
-				$pre_tables[ $table ] = $this->base_prefix . $table;
-			else
-				$pre_tables[ $table ] = $blog_prefix . $table;
-		}
-
-		if ( isset( $tables['users'] ) ) {
-			if( defined( 'CUSTOM_USER_TABLE' ) )
-				$pre_tables['users'] = CUSTOM_USER_TABLE;
-			if ( defined( 'CUSTOM_USER_META_TABLE' ) )
-				$pre_tables['usermeta'] = CUSTOM_USER_META_TABLE;
-		}
-		return $pre_tables;
-	}
-	function get_blog_prefix( $blog_id = null ) {
-		return $this->base_prefix;
-	}
-	function set_prefix( $prefix, $set_table_names = true ) {
-
-		if ( preg_match( '|[^a-z0-9_]|i', $prefix ) )
-			return new WP_Error('invalid_db_prefix', /*WP_I18N_DB_BAD_PREFIX*/'Invalid database prefix'/*/WP_I18N_DB_BAD_PREFIX*/);
-
-		$old_prefix = $prefix;
-
-		if ( isset( $this->base_prefix ) )
-			$old_prefix = $this->base_prefix;
-
-		$this->base_prefix = $prefix;
-
-		if ( $set_table_names ) {
-			foreach ( $this->tables( 'all' ) as $table => $prefixed_table )
-				$this->$table = $prefixed_table;
-
-			$this->prefix = $this->get_blog_prefix();
-		}
-		return $old_prefix;
-	}
-} // class db
-endif;
-
-
-if ( !class_exists( 'wpdb' ) && is_multisite() ) :
-class wpdb extends db {
-	var $prefix = '';
-	var $ready = true;
-	var $blogid = 0;
-	var $siteid = 0;
-	var $blogs, $signups, $site, $sitemeta, $users, $usermeta, $sitecategories, $registration_log, $blog_versions, $posts, $categories, $post2cat, $comments, $links, $link2cat, $options, $postmeta, $terms, $term_taxonomy, $term_relationships;
-
-	function wpdb($dbuser, $dbpassword, $dbname, $dbhost) {
-		return $this->__construct($dbuser, $dbpassword, $dbname, $dbhost);
-	}
-
-	function __construct($dbuser, $dbpassword, $dbname, $dbhost) {
-		$args = array();
-
-		if ( defined('WP_DEBUG') and WP_DEBUG == true )
-			$args['show_errors'] = true;
-
-		if ( defined('DB_CHARSET') )
-			$args['charset'] = DB_CHARSET;
-		else
-			$args['charset'] = 'utf8';
-
-		if ( defined('DB_COLLATE') )
-			$args['collate'] = DB_COLLATE;
-		elseif ( $args['charset'] == 'utf8' )
-			$args['collate'] = 'utf8_general_ci';
-
-		$args['save_queries'] = (bool) constant('SAVEQUERIES');
-
-		$args['db_server'] = array(
-			'user'     => $dbuser,
-			'password' => $dbpassword,
-			'name'     => $dbname,
-			'host'     => $dbhost
-		);
-
-		return parent::__construct($args);
 	}
 
 	function set_prefix( $prefix, $set_table_names = true ) {
@@ -1224,55 +565,41 @@ class wpdb extends db {
 
 		return $old_blog_id;
 	}
+	/* WP 3.0 */
+	function tables( $scope = 'all', $prefix = true, $blog_id = 0 ) {
+		$key = $scope . '_tables';
+		if( !isset( $this->$key ) )
+			return array();
 
-	function get_blog_prefix( $blog_id = null ) {
-		if ( null === $blog_id )
+		$tables = $this->$key;
+
+		if ( !$prefix )
+			return $tables;
+
+		if ( ! $blog_id )
 			$blog_id = $this->blogid;
-		if ( defined( 'MULTISITE' ) && ( 0 == $blog_id || 1 == $blog_id ) )
-			return $this->base_prefix;
 
-		return $this->base_prefix . $blog_id . '_';
+		$blog_prefix = $this->get_blog_prefix( $blog_id );
+		$pre_tables = array();
+
+		foreach ( $tables as $table ) {
+			if ( in_array( $table, $this->global_tables ) )
+				$pre_tables[ $table ] = $this->base_prefix . $table;
+			else
+				$pre_tables[ $table ] = $blog_prefix . $table;
+		}
+
+		if ( isset( $tables['users'] ) ) {
+			if( defined( 'CUSTOM_USER_TABLE' ) )
+				$pre_tables['users'] = CUSTOM_USER_TABLE;
+			if ( defined( 'CUSTOM_USER_META_TABLE' ) )
+				$pre_tables['usermeta'] = CUSTOM_USER_META_TABLE;
+		}
+		return $pre_tables;
 	}
+} // class SharDB
 
-	function print_error($str = '') {
-		global $EZSQL_ERROR;
-
-		if (!$str) $str = mysql_error($this->dbh);
-		$EZSQL_ERROR[] = array ('query' => $this->last_query, 'error_str' => $str);
-
-		if ( $this->suppress_errors )
-			return false;
-
-		if ( $caller = $this->get_caller() )
-			$error_str = sprintf(/*WP_I18N_DB_QUERY_ERROR_FULL*/'WordPress database error %1$s for query %2$s made by %3$s'/*/WP_I18N_DB_QUERY_ERROR_FULL*/, $str, $this->last_query, $caller);
-		else
-			$error_str = sprintf(/*WP_I18N_DB_QUERY_ERROR*/'WordPress database error %1$s for query %2$s'/*/WP_I18N_DB_QUERY_ERROR*/, $str, $this->last_query);
-
-		$log_error = true;
-		if ( ! function_exists('error_log') )
-			$log_error = false;
-
-		$log_file = @ini_get('error_log');
-		if ( !empty($log_file) && ('syslog' != $log_file) && !is_writable($log_file) )
-			$log_error = false;
-
-		if ( $log_error )
-			@error_log($error_str, 0);
-
-		// Is error output turned on or not..
-		if ( !$this->show_errors )
-			return false;
-
-		// If there is an error then take note of it
-		$msg = "WordPress database error: [$str]\n{$this->query}\n";
-		if( defined( 'ERRORLOGFILE' ) )
-			error_log( $msg, 3, CONSTANT( 'ERRORLOGFILE' ) );
-		if( defined( 'DIEONDBERROR' ) )
-			die( $msg );
-	}
-} // class wpdb
-
-$wpdb = new wpdb(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST);
+$wpdb = new SharDB(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST);
 endif;
 
 ?>

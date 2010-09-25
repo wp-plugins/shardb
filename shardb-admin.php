@@ -3,7 +3,7 @@
 Plugin Name: SharDB site admin utilities for WordPress MU 
 Plugin URI: http://wpmututorials.com/plugins/shardb/
 Description: A Multi-database plugin for WordPress MU
-Version: 2.7.4
+Version: 2.7.5
 Author: Ron Rennick
 Author URI: http://ronandandrea.com/
 Donate link: http://wpmututorials.com/
