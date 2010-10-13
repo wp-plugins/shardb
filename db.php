@@ -589,7 +589,7 @@ class SharDB extends wpdb {
 				$pre_tables[ $table ] = $blog_prefix . $table;
 		}
 
-		if ( isset( $tables['users'] ) ) {
+		if ( isset( $pre_tables['users'] ) ) {
 			if( defined( 'CUSTOM_USER_TABLE' ) )
 				$pre_tables['users'] = CUSTOM_USER_TABLE;
 			if ( defined( 'CUSTOM_USER_META_TABLE' ) )
