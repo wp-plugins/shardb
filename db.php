@@ -15,6 +15,7 @@ if( !class_exists( 'wpdb' ) ) {
 if ( is_multisite() ) :
 class SharDB extends wpdb {
 	var $ready = true;
+	var $never_connected = true;
 	var $site_tables = false;
 	var $blog_tables = false;
 	var $all_tables = false;
@@ -43,20 +44,20 @@ class SharDB extends wpdb {
 	function __construct($dbuser, $dbpassword, $dbname, $dbhost) {
 		register_shutdown_function( array( &$this, '__destruct' ) );
 
-		if ( defined('WP_DEBUG') and WP_DEBUG == true )
-			$this->show_errors = true;
+		if ( defined( 'WP_DEBUG' ) )
+			$this->show_errors = (bool) WP_DEBUG;
 
-		if ( defined('DB_CHARSET') )
+		if ( defined( 'DB_CHARSET' ) )
 			$this->charset = DB_CHARSET;
 		else
 			$this->charset = 'utf8';
 
-		if ( defined('DB_COLLATE') )
+		if ( defined( 'DB_COLLATE' ) )
 			$this->collate = DB_COLLATE;
 		elseif ( $this->charset == 'utf8' )
 			$this->collate = 'utf8_general_ci';
 
-		$this->save_queries = (bool) constant('SAVEQUERIES');
+		$this->save_queries = (bool) constant( 'SAVEQUERIES' );
 
 		if ( !$this->single_db ) {
 			if ( empty( $this->db_servers ) && isset( $GLOBALS['db_servers'] ) && is_array( $GLOBALS['db_servers'] ) )
@@ -71,9 +72,7 @@ class SharDB extends wpdb {
 				$this->single_db = true;
 		}
 		$this->user_tables = $this->global_tables;
-		if( is_multisite() )
-			$this->global_tables = array_merge( $this->user_tables, $this->ms_global_tables );
-
+		$this->global_tables = array_merge( $this->user_tables, $this->ms_global_tables );
 		$this->blog_tables = $this->tables;
 		$this->site_tables = array_merge( $this->blog_tables, $this->old_tables );
 		$this->all_tables = array_merge( $this->global_tables, $this->site_tables );
@@ -182,13 +181,11 @@ class SharDB extends wpdb {
 		return compact( 'dataset', 'hash', 'partition' );
 	}
 
-	function get_dataset_from_table( $table ) {
-		if ( isset( $this->db_tables[$table] ) )
-			return $this->db_tables[$table];
-		foreach ( $this->db_tables as $pattern => $dataset ) {
-			if ( '/' == substr( $pattern, 0, 1 ) && preg_match( $pattern, $table ) ) 
-				return $dataset;
-		}
+	function get_partition_from_table( $table ) {
+		global $shardb_dataset, $db_ds_parts;
+		if( isset( $this->db_tables[$table] ) && preg_match( '|^(.*)\_(.*)$|', $db_ds_parts[$this->db_tables[$table]], $match ) )
+			return array( 'dataset' => $match[1], 'partition' => $match[2] );
+
 		return false;
 	}
 
@@ -198,7 +195,7 @@ class SharDB extends wpdb {
 	 * @return resource mysql database connection
 	 */
 	function &db_connect( $query = '' ) {
-		global $vip_db, $shardb_local_db;
+		global $vip_db, $shardb_local_db, $enable_home_db;
 		$connect_function = $this->persistent ? 'mysql_pconnect' : 'mysql_connect';
 		if ( $this->single_db ) {
 			if ( is_resource( $this->dbh ) )
@@ -216,6 +213,15 @@ class SharDB extends wpdb {
 			}
 			return $this->dbh;
 		} else {
+			if( $this->never_connected ) {
+				$this->never_connected = false;
+				if( $enable_home_db && defined( 'MULTISITE' ) ) {
+					foreach( $this->tables( 'site', true, 1 ) as $t )
+						add_db_table( $t, 'home' );
+				}
+				if ( empty( $this->db_tables ) && isset( $GLOBALS['db_tables'] ) && is_array( $GLOBALS['db_tables'] ) )
+					$this->db_tables =& $GLOBALS['db_tables'];
+			}
 			if ( empty( $query ) )
 				return false;
 
@@ -224,7 +230,7 @@ class SharDB extends wpdb {
 			$this->last_table = $table;
 			$partition = 0;
 
-			 if( ( $ds_part = $this->get_ds_part_from_table( $table ) ) ) {
+			 if( ( $ds_part = $this->get_ds_part_from_table( $table ) ) || ( $ds_part = $this->get_partition_from_table( $table ) ) ) {
 				extract( $ds_part, EXTR_OVERWRITE );
 				$dbhname = "{$dataset}_{$partition}";
 			} else {
