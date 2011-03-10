@@ -183,10 +183,7 @@ function shardb_migrate_site_tables( $blog_id, $siteurl, &$source_object, $shard
 				$create = $source_object->get_row( "SHOW CREATE TABLE $t", ARRAY_N );
 				if( !empty( $create[1] ) ) {
 					$data = $source_object->get_results( "SELECT * FROM $t", ARRAY_A );
-					if( !$target_object->query( $create[1] ) ) {
-						$errors[] = $target_object->last_error;
-						continue;
-					}
+					$target_object->query( $create[1] );
 					foreach( $data as $row )
 						$target_object->insert( $t, $row );
 					$msg .= 'copied';
