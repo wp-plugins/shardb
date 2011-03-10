@@ -15,7 +15,10 @@ Author URI: http://ronandandrea.com/
 function shardb_get_ds_part_from_blog_id( $blog_id ) {
 	global $shardb_hash_length, $shardb_dataset, $shardb_num_db, $vip_db, $shardb_prefix, $enable_home_db, $db_ds_parts;
 	
-	if( isset( $shardb_hash_length ) ) {
+	if( !$enable_home_db && $blog_id < 2 && defined( 'MULTISITE' ) ) {
+		$dataset = 'global'; 
+		$partition = 0;
+	} elseif( isset( $shardb_hash_length ) ) {
 		$dataset = $shardb_dataset; 
 		$hash = substr( md5( $blog_id ), 0, $shardb_hash_length );
 		$partition = hexdec( $hash );
