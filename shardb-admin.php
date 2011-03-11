@@ -55,6 +55,7 @@ function shardb_blog_field( $column, $blog_id ) {
 	}
 }
 add_action( 'manage_blogs_custom_column', 'shardb_blog_field', 10, 3 );
+add_action( 'manage_sites_custom_column', 'shardb_blog_field', 10, 3 );
 
 function shardb_migrate() {
 	global $wpdb, $shardb_hash_length, $shardb_dataset, $shardb_num_db, $vip_db, $shardb_prefix;
