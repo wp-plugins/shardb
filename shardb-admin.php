@@ -223,7 +223,7 @@ function shardb_migrate_site_tables( $blog_id, $siteurl, &$source_object, $shard
 	return $errors;
 }
 function shardb_migrate_global_tables( &$source_object, $display = true ) {
-	global $db_servers;
+	global $db_servers, $enable_home_db;
 
 	if( empty( $db_servers['global'][0] ) )
 		return array();
@@ -237,10 +237,17 @@ function shardb_migrate_global_tables( &$source_object, $display = true ) {
 	if( !empty( $tables ) ) {
 		$global = new wpdb( DB_USER, DB_PASSWORD, $db_server['name'], DB_HOST );
 		$new_tables = $global->get_col( 'SHOW TABLES' );
+		$blog_tables = array();
+		if( $enable_home_db && defined( 'MULTISITE' ) )
+			$blog_tables = $source_object->tables( 'blog', true, 1 );
+			
 		if( $display )
 			echo "<h4>Global Tables</h4><ul>\n";
 			
 		foreach( $tables as $t ) {
+			if( in_array( $t, $blog_tables ) )
+				continue;
+				
 			$msg = "<li>$t <strong>";
 			if( !in_array( $t, $new_tables ) ) {
 				$create = $source_object->get_row( "SHOW CREATE TABLE $t", ARRAY_N );
