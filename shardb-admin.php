@@ -74,7 +74,9 @@ function shardb_migrate() {
 	echo '<h2>' . __( 'SharDB Migration', 'shardb' ) . '</h2>';
 
 	$action = isset($_GET['action']) ? $_GET['action'] : 'show';
-	$start_url = add_query_arg( array( 'action' => 'migrate' ), menu_page_url( __FUNCTION__, false ) );
+	$url = menu_page_url( __FUNCTION__, false );
+	$start_url = add_query_arg( array( 'action' => 'migrate' ), $url );
+	$global_url = add_query_arg( array( 'action' => 'global' ), $url );
 
 	switch ( $action ) {
 		case 'migrate':
@@ -88,7 +90,7 @@ function shardb_migrate() {
 			$shards = array();
 			echo '<ul>';
 			$count = 0;
-			foreach ( $sites as $site ) {
+			foreach( $sites as $site ) {
 				$count++;
 				$siteurl = get_blog_option( $site, 'siteurl' );
 				if( empty( $siteurl ) )
@@ -103,7 +105,7 @@ function shardb_migrate() {
 			}
 			echo '</ul>';
 			$next_url = add_query_arg( array( 'next' => $next + $count ), $start_url );
-//			var_dump( $errors ); die;
+
 			if( empty( $errors ) ) {
 			?><p><?php _e( 'If your browser doesn&#8217;t start loading the next page automatically, click this link:' ); ?> <a class="button" href="<?php echo $next_url ?>"><?php _e("Next Sites"); ?></a></p>
 			<script type='text/javascript'>
@@ -117,10 +119,18 @@ function shardb_migrate() {
 			} else
 				echo '<p>' . __( 'Please review the messages above before continuing!', 'shardb' ) . '<a class="button" href="' . $next_url .'">' . __("Next Sites") . '</a></p>';
 		break;
+		case 'global':
+			$errors = shardb_migrate_global_tables( &$wpdb );
+			if( !empty( $errors ) ) {
+				foreach( $errors as $e )
+					echo '<li><strong>' . $e . '</strong></li>';
+				break;
+			}
 		case 'show':
 		default:
-			?><p><?php _e( 'You can migrate all the database tables on your network through this page. It works by calling the migrate script for each site automatically. Hit the link below to migrate.', 'shardb' ); ?></p>
-			<p><a class="button" href="<?php echo $start_url; ?>"><?php _e( 'Migrate Database', 'shardb' ); ?></a></p><?php
+			?><p><?php _e( 'You can migrate all the database tables on your network through this page. It works by calling the migrate script for each site automatically.', 'shardb' ); ?></p>
+			<p><a class="button" href="<?php echo $global_url; ?>"><?php _e( 'Migrate Global Tables', 'shardb' ); ?></a>
+			<a class="button" href="<?php echo $start_url; ?>"><?php _e( 'Migrate Sites', 'shardb' ); ?></a></p><?php
 		break;
 	}
 	echo '</div>';
@@ -210,6 +220,50 @@ function shardb_migrate_site_tables( $blog_id, $siteurl, &$source_object, $shard
 	if( empty( $errors ) && $blog_id == 1 && defined( 'MULTISITE' ) )
 		$errors[] = __( 'Please review the tables copied for the main site before proceeding', 'shardb' );
 
+	return $errors;
+}
+function shardb_migrate_global_tables( &$source_object, $display = true ) {
+	global $db_servers;
+
+	if( empty( $db_servers['global'][0] ) )
+		return array();
+	
+	$db_server = current( $db_servers['global'][0] );
+	$column = 'Tables_in_' . $source_object->dbname;
+	$query = "SHOW TABLES WHERE {$column} LIKE '{$source_object->base_prefix}%' AND SUBSTR({$column}," . ( strlen( $source_object->base_prefix ) + 1 ) . ',1) NOT BETWEEN 1 AND 9';
+	$tables = $source_object->get_col( $query );
+	
+	$errors = array();
+	if( !empty( $tables ) ) {
+		$global = new wpdb( DB_USER, DB_PASSWORD, $db_server['name'], DB_HOST );
+		$new_tables = $global->get_col( 'SHOW TABLES' );
+		if( $display )
+			echo "<h4>Global Tables</h4><ul>\n";
+			
+		foreach( $tables as $t ) {
+			$msg = "<li>$t <strong>";
+			if( !in_array( $t, $new_tables ) ) {
+				$create = $source_object->get_row( "SHOW CREATE TABLE $t", ARRAY_N );
+				if( !empty( $create[1] ) ) {
+					$data = $source_object->get_results( "SELECT * FROM $t", ARRAY_A );
+					$global->query( $create[1] );
+					foreach( $data as $row )
+						$global->insert( $t, $row );
+					$msg .= 'copied';
+				} else
+					$msg .= 'was not copied';
+				$prep = 'to';
+			} else {
+				$msg .= 'already exists';
+				$prep = 'in';
+			}
+			if( $display )
+				echo $msg . "</strong> $prep <strong>{$db_server['name']}</strong></li>";
+		}
+		if( $display )
+			echo '</ul>';
+		
+	}
 	return $errors;
 }
 ?>
