@@ -88,10 +88,9 @@ function add_db_server($ds, $part, $dc, $read, $write, $host, $lhost, $name, $us
 
 //dataset, partition, datacenter, R, W,             internet host:port,     internal network host:port,   database,        user,        password
 
-// uncomment the next line for the migration script
-// add_db_server( 'global', 0,    '', 1, 1,    DB_HOST, DB_HOST, $shardb_prefix . 'global', DB_USER, DB_PASSWORD );
+add_db_server( 'global', 0,    '', 1, 1,    DB_HOST, DB_HOST, $shardb_prefix . 'global', DB_USER, DB_PASSWORD );
 // Next line populates 'global' dataset from wp-config.php for instant compatibility. Remove it when you put your settings here.
-add_db_server('global', 0,    '', 1, 1,    DB_HOST, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD);
+// add_db_server('global', 0,    '', 1, 1,    DB_HOST, DB_HOST, DB_NAME, DB_USER, DB_PASSWORD);
 
 // build the shard dataset
 $have_slaves = is_array($slaves) && (count($slaves) > 0);
