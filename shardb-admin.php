@@ -58,7 +58,7 @@ add_action( 'manage_blogs_custom_column', 'shardb_blog_field', 10, 3 );
 add_action( 'manage_sites_custom_column', 'shardb_blog_field', 10, 3 );
 
 function shardb_migrate() {
-	global $wpdb, $shardb_hash_length, $shardb_dataset, $shardb_num_db, $vip_db, $shardb_prefix;
+	global $wpdb, $shardb_hash_length, $shardb_dataset, $shardb_num_db, $vip_db, $shardb_prefix, $enable_home_db;
 
 	if ( ! current_user_can( 'manage_network' ) )
 		wp_die( __( 'You do not have permission to access this page.' ) );
@@ -81,6 +81,8 @@ function shardb_migrate() {
 	switch ( $action ) {
 		case 'migrate':
 			$next = ( isset($_GET['next']) ) ? intval($_GET['next']) : 0;
+			if( !$next && !$enable_home_db && defined( 'MULTISITE' ) )
+				$next = 1;
 
 			$sites = $wpdb->get_col( "SELECT blog_id FROM {$wpdb->blogs} ORDER BY blog_id ASC LIMIT {$next}, 5" );
 			if ( empty( $sites ) ) {
@@ -136,7 +138,7 @@ function shardb_migrate() {
 	echo '</div>';
 }
 function add_shardb_migrate_page() {
-	if( !class_exists( 'SharDB' ) && function_exists( 'is_multisite' ) && is_multisite() )
+	if( !class_exists( 'SharDB' ) && is_multisite() && is_main_site() )
 		add_submenu_page( 'ms-admin.php', 'SharDB Migration', 'SharDB Migration', 'manage_network', 'shardb_migrate', 'shardb_migrate' );
 }
 add_action( 'admin_menu', 'add_shardb_migrate_page' );
