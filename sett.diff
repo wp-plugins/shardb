@@ -1,0 +1,123 @@
+Index: db-settings.php
+===================================================================
+--- db-settings.php	(revision 270414)
++++ db-settings.php	(working copy)
+@@ -71,7 +69,7 @@
+  * @param string $password Database password.
+  */
+ function add_db_server($ds, $part, $dc, $read, $write, $host, $lhost, $name, $user, $password) {
+-	global $db_servers;
++	global $db_servers, $db_ds_parts;
+ 
+ 	if ( empty( $lhost ) )
+ 		$lhost = $host;
+@@ -79,6 +77,7 @@
+ 	$server = compact('ds', 'part', 'dc', 'read', 'write', 'host', 'lhost', 'name', 'user', 'password');
+ 
+ 	$db_servers[$ds][$part][] = $server;
++	$db_ds_parts[$name] = "{$ds}_{$part}";
+ }
+ 
+ // Database servers grouped by dataset. (Totally tabular, dude!)
+@@ -95,7 +94,7 @@
+ if(isset($shardb_hash_length) && $shardb_hash_length > 0 && $shardb_hash_length < 4 ) {
+ 	$fmt = "{$shardb_prefix}%0{$shardb_hash_length}x";
+ 	$shardb_num_db = 1 << ($shardb_hash_length*4);
+-	if(!$have_slaves || !isset($shardb_master_read)) {
++	if(!$have_slaves || !isset( $shardb_master_read )) {
+ 		$shardb_master_read = 1;
+ 	}
+ 	for($d=0;$d<$shardb_num_db;$d++) {
+@@ -111,7 +110,7 @@
+ 	
+ 	// Enable home db?
+     if ($enable_home_db === true) {
+-        add_db_server($shardb_dataset, $numdbs_added, '', 1, 1, DB_HOST, DB_HOST, $shardb_prefix .'home', DB_USER, DB_PASSWORD);
++        add_db_server($shardb_dataset, $numdbs_added, '', 1, $shardb_master_read, DB_HOST, DB_HOST, $shardb_prefix .'home', DB_USER, DB_PASSWORD);
+ 		if($have_slaves) {
+ 			foreach($slaves as $s) {
+ 				add_db_server($shardb_dataset, $numdbs_added,  '', $s['read'], 0,  $s['host'],  $s['lhost'], $shardb_prefix .'home',  $s['user'], $s['password']);
+@@ -122,7 +121,7 @@
+ 	// VIP databases
+     if ( is_numeric($num_vipdbs) and $num_vipdbs > 0 ) {
+         for($d=1;$d<=$num_vipdbs;$d++) {
+-            add_db_server($shardb_dataset, $numdbs_added, '', 1, 1, DB_HOST, DB_HOST, $shardb_prefix .'vip'. $d, DB_USER, DB_PASSWORD);
++            add_db_server($shardb_dataset, $numdbs_added, '', 1, $shardb_master_read, DB_HOST, DB_HOST, $shardb_prefix .'vip'. $d, DB_USER, DB_PASSWORD);
+ 			if($have_slaves) {
+ 				foreach($slaves as $s) {
+ 					add_db_server($shardb_dataset, $numdbs_added,  '', $s['read'], 0,  $s['host'],  $s['lhost'], $db_name,  $s['user'], $s['password']);
+@@ -138,59 +137,45 @@
+ */
+ 
+ /**
+- * Map a table to a dataset.
++ * Map a table to a partition.
+  *
+- * @param string $ds
+  * @param string $table
++ * @param string $part
+  */
+-function add_db_table($ds, $table) {
+-	global $db_tables;
++function add_db_table( $table, $db ) {
++	global $db_tables, $shardb_prefix;
+ 
+-	$db_tables[$table] = $ds;
++	$db_tables[$table] = $shardb_prefix . $db;
+ }
+ 
+-// Three kinds of db connections are supported:
+-//  1. global (e.g. wp_users)
+-//  2. partitioned (e.g. wp_data_3e_views)
+-//  3. external (e.g. misc)
+-
+-// When a query is tried, HyperDB extracts the table name to find it in a
+-// dataset. If the table is not added to a dataset here, and if it is not
+-// a partitioned table, HyperDB will assume it is in the "global" dataset.
+-
+-// External tables MUST be listed below with their dataset
+-// or wpdb with assume they are global and fail to find them.
+-
+-// Global tables MAY be added here to minimize computation.
+-
+-// Tables in partitioned datasets MUST NOT be added here.
+-
+ // ** NO DUPLICATE TABLE NAMES ALLOWED **
+-// Also be careful that your non-partitioned tables don't match the patterns in get_ds_part_from_table!
++// If running with the home DB enabled & a WP 3.0 single install converted to a network add any main site plugin tables here
++// If you want tables to live in a specific database, you can add those here
++// add_db_table( 'wp_misc', 'home' );
++// add_db_table( 'wp_etc', 'vip1' );
++// add_db_table( 'wp_extra', 'vip1' );
+ 
+-// add_db_table('misc', 'my_stuff');
+-// add_db_table('misc', 'hot_data');
+-// add_db_table('misc', 'bbq_sauces');
++
+ /**
+  * Map a blog to a custom database. AKA: VIP
+  *
+  * @param string $blog_id
+  * @param string $db
+  */
+-function add_vip_blog($blog_id, $db) {
++function add_vip_blog( $blog_id, $db ) {
+     global $vip_db, $shardb_prefix;
+     $vip_db[$blog_id] = $shardb_prefix . $db;
+ }
+ 
+ // Adding a blog to a VIP database is simple.
+ // You can put it in whatever VIP DB you want, or even in
+-// another user db (like for a penalty box for low traffic blogs).
++// another user db (like for a penalty box for low traffic blogs.
+ 
+ // Simply use this format:
+-// add_vip_blog($blog_id, 'db_suffix');
++// add_vip_blog($blog_id, 'db_name');
+ 
+ // For example, lets say your buddy John needs some extra db love,
+-// his blog_id is 24 and you want to put him in the acct_wpmuvip3 database.
++// his blog_id is 24 and you want to put him in the vip3 database.
+ // You would add a line below like this:
+ //add_vip_blog(24,'vip3'); // John's blog
+ 
