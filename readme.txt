@@ -2,7 +2,7 @@
 Contributors: wpmuguru
 Tags: database, sharding, multiple, database, multisite, network 
 Requires at least: 3.0
-Tested up to: 3.1
+Tested up to: 3.2
 Stable tag: 2.7.5
 
 Implements a MD5 hash based multiple database sharding structure for WordPress network blog tables.
