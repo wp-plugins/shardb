@@ -606,6 +606,71 @@ class SharDB extends wpdb {
 } // class SharDB
 
 $wpdb = new SharDB(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST);
+
+class BPDB extends SharDB {
+
+	function BPDB( $dbuser, $dbpassword, $dbname, $dbhost ) {
+		$this->__construct( $dbuser, $dbpassword, $dbname, $dbhost );
+	}
+
+	function __construct( $dbuser, $dbpassword, $dbname, $dbhost ) {
+		parent::__construct( $dbuser, $dbpassword, $dbname, $dbhost );
+
+		$args = func_get_args();
+		$args = call_user_func_array( array( &$this, 'init' ), $args );
+
+		if ( $args['host'] )
+			$this->db_servers['dbh_global'] = $args;
+	}
+
+	/**
+	 * Determine if a database supports a particular feature.
+	 *
+	 * Overriden here to work around differences between bbPress', and WordPress', implementation differences.
+	 * In particular, when BuddyPress tries to run bbPress' SQL installation script, the collation check always
+	 * failed. The capability is long supported by WordPress' minimum required MySQL version, so this is safe.
+	 */
+	function has_cap( $db_cap, $_table_name='' ) {
+		if ( 'collation' == $db_cap )
+			return true;
+
+		return parent::has_cap( $db_cap );
+	}
+
+	/**
+	 * Initialises the class variables based on provided arguments.
+	 * Based on, and taken from, the BackPress class in turn taken from the 1.0 branch of bbPress.
+	 */
+	function init( $args ) {
+		if ( 4 == func_num_args() ) {
+			$args = array(
+				'user'     => $args,
+				'password' => func_get_arg( 1 ),
+				'name'     => func_get_arg( 2 ),
+				'host'     => func_get_arg( 3 ),
+				'charset'  => defined( 'BBDB_CHARSET' ) ? BBDB_CHARSET : false,
+				'collate'  => defined( 'BBDB_COLLATE' ) ? BBDB_COLLATE : false,
+			);
+		}
+
+		$defaults = array(
+			'user'     => false,
+			'password' => false,
+			'name'     => false,
+			'host'     => 'localhost',
+			'charset'  => false,
+			'collate'  => false,
+			'errors'   => false
+		);
+
+		return wp_parse_args( $args, $defaults );
+	}
+
+	function escape_deep( $data ) {
+		return $this->escape( $data );
+	}
+} // class BPDB
+
 endif;
 
 ?>
