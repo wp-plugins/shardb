@@ -1,8 +1,8 @@
 === SharDB ===
 Contributors: wpmuguru
 Tags: database, sharding, multiple, database, multisite, network 
-Requires at least: 3.0
-Tested up to: 3.2
+Requires at least: 3.2
+Tested up to: 3.3
 Stable tag: 2.7.5
 
 Implements a MD5 hash based multiple database sharding structure for WordPress network blog tables.
@@ -11,9 +11,9 @@ Implements a MD5 hash based multiple database sharding structure for WordPress n
 
 This is intended for larger WordPress Network installs using an existing 1-3 character MD5 hash (by blog id) based multi-DB sharding structure. It supports 16, 256 or 4096 database shards. It also supports a separate database for blog id 1 and multiple VIP databases (home & VIP code contribution by Luke Poland).
 
-It has been tested with over 50 plugins including BuddyPress 1.1 through 1.2.8. I have not found any issues with any of the tested plugins. It should support any plugin that works with (and accesses all data via) the regular WordPress database code. 
+It has been tested with over 50 plugins including BuddyPress 1.1 through 1.5. I have not found any issues with any of the tested plugins. It should support any plugin that works with (and accesses all data via) the regular WordPress database code. 
 
-It has been used to power MU version 2.7.1 through WordPress 3.1 sites and upgrade sites from 2.7.1 through to the WordPress 3.1.
+It has been used to power MU version 2.7.1 through WordPress 3.3 sites and upgrade sites from 2.7.1 through to the WordPress 3.3.
 
 A detailed [installation guide](http://wpebooks.com/shardb-installation-guide/) can be purchased for a nominal fee. 
 
@@ -28,15 +28,21 @@ This plugin is based on [HyperDB](http://wordpress.org/extend/plugins/hyperdb) w
 3. Once finished editing db-setting.php upload it to the same folder as wp-config.php for your WordPress install.
 4. Edit your wp-config.php and add the following line after the database settings are defined:
 	require_once('db-settings.php');
-5. upload shardb-admin.php to /wp-content/mu-plugins/.
-6. Migrate your data to your DB shards using the SharDB migration screen under Tools on the main site. 
-7. upload db.php to /wp-content/.
+5. upload shardb-admin.php to /wp-content/plugins/.
+6. Network activate the SharDB admin tools in Network Admin -> Plugins.
+7. Migrate your data to your DB shards using the SharDB migration screen under Network Admin -> Settings on the main site. 
+8. upload db.php to /wp-content/.
 
 == Screenshots ==
 
 1. Site admin blogs screen showing dataset / partition for each blog.
 
 == Changelog ==
+
+= 2.7.6 =
+* Added 3.3.X support.
+* Added support for BuddyPress 1.5 forums.
+* Dropped support for pre 3.2 WordPress.
 
 = 2.7.5 =
 * Added 3.1.X support.

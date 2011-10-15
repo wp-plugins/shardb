@@ -1,11 +1,4 @@
 <?php
-/*
- * allow this version to run on 2.9.X
- */
-if( !function_exists( 'is_multisite' ) ) {
-	function is_multisite() { return true; }
-}
-
 if( !class_exists( 'wpdb' ) ) {
 	$wpdb = true;
 	require( ABSPATH . WPINC . '/wp-db.php' );
@@ -36,10 +29,6 @@ class SharDB extends wpdb {
 	var $last_used_server;
 	var $used_servers = array();
 	var $written_servers = array();
-
-	function SharDB($dbuser, $dbpassword, $dbname, $dbhost) {
-		return $this->__construct($dbuser, $dbpassword, $dbname, $dbhost);
-	}
 
 	function __construct($dbuser, $dbpassword, $dbname, $dbhost) {
 		register_shutdown_function( array( &$this, '__destruct' ) );
@@ -607,11 +596,9 @@ class SharDB extends wpdb {
 
 $wpdb = new SharDB(DB_USER, DB_PASSWORD, DB_NAME, DB_HOST);
 
-class BPDB extends SharDB {
+if( !class_exists( 'BPDB' ) ) :
 
-	function BPDB( $dbuser, $dbpassword, $dbname, $dbhost ) {
-		$this->__construct( $dbuser, $dbpassword, $dbname, $dbhost );
-	}
+class BPDB extends SharDB {
 
 	function __construct( $dbuser, $dbpassword, $dbname, $dbhost ) {
 		parent::__construct( $dbuser, $dbpassword, $dbname, $dbhost );
@@ -671,6 +658,7 @@ class BPDB extends SharDB {
 	}
 } // class BPDB
 
-endif;
+endif; // !class_exists( 'BPDB' )
+endif; // is_multisite()
 
 ?>

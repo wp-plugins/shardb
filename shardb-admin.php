@@ -6,6 +6,7 @@ Description: A Multi-database plugin for WordPress networks
 Version: 2.7.6
 Author: Ron Rennick
 Author URI: http://ronandandrea.com/
+Network: true
  
 */
 /* Copyright:	(C) 2009 Ron Rennick, All rights reserved.  
@@ -54,7 +55,6 @@ function shardb_blog_field( $column, $blog_id ) {
 		echo $ds_part[ 'dataset' ] . ' / ' . $db_servers[ $ds_part[ 'dataset' ] ][ $ds_part[ 'partition' ] ][ 0 ][ 'name' ];
 	}
 }
-add_action( 'manage_blogs_custom_column', 'shardb_blog_field', 10, 3 );
 add_action( 'manage_sites_custom_column', 'shardb_blog_field', 10, 3 );
 
 function shardb_migrate() {
@@ -138,10 +138,10 @@ function shardb_migrate() {
 	echo '</div>';
 }
 function add_shardb_migrate_page() {
-	if( !class_exists( 'SharDB' ) && is_multisite() && is_main_site() )
-		add_submenu_page( 'ms-admin.php', 'SharDB Migration', 'SharDB Migration', 'manage_network', 'shardb_migrate', 'shardb_migrate' );
+	if( !class_exists( 'SharDB' ) && is_multisite() )
+		add_submenu_page( 'settings.php', 'SharDB Migration', 'SharDB Migration', 'manage_network', 'shardb_migrate', 'shardb_migrate' );
 }
-add_action( 'admin_menu', 'add_shardb_migrate_page' );
+add_action( 'network_admin_menu', 'add_shardb_migrate_page' );
 
 function shardb_migrate_site_tables( $blog_id, $siteurl, &$source_object, $shard_prefix, $display = true ) {
 	global $db_tables;
