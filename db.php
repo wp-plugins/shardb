@@ -3,7 +3,11 @@ if( !class_exists( 'wpdb' ) ) {
 	$wpdb = true;
 	require( ABSPATH . WPINC . '/wp-db.php' );
 }
-
+	
+if( !isset( $shardb_hash_length ) ) {
+	$wpdb = new wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
+	return;
+}
 
 if ( is_multisite() ) :
 class SharDB extends wpdb {
