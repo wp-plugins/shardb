@@ -3,7 +3,9 @@ if( !class_exists( 'wpdb' ) ) {
 	$wpdb = true;
 	require( ABSPATH . WPINC . '/wp-db.php' );
 }
-	
+
+global $shardb_hash_length;
+
 if( !isset( $shardb_hash_length ) ) {
 	$wpdb = new wpdb( DB_USER, DB_PASSWORD, DB_NAME, DB_HOST );
 	return;
@@ -28,6 +30,7 @@ class SharDB extends wpdb {
 	var $max_connections = 10;
 	var $srtm = false;
 	var $db_connections;
+	var $open_connections = null;
 	var $current_host;
 	var $dbh2host = array();
 	var $last_used_server;
@@ -73,6 +76,10 @@ class SharDB extends wpdb {
 		$this->dbpassword = $dbpassword;
 		$this->dbname = $dbname;
 		$this->dbhost = $dbhost;
+
+		if ( null === $this->open_connections )
+			$this->open_connections = array();
+
 	}
 
 	/**
