@@ -98,7 +98,7 @@ function shardb_migrate() {
 				if( empty( $siteurl ) )
 					continue;
 
-				$errors = shardb_migrate_site_tables( $site, $siteurl, &$wpdb, $shardb_prefix );
+				$errors = shardb_migrate_site_tables( $site, $siteurl, $wpdb, $shardb_prefix );
 				if( !empty( $errors ) ) {
 					foreach( $errors as $e )
 						echo '<li><strong>' . $e . '</strong></li>';
@@ -122,7 +122,7 @@ function shardb_migrate() {
 				echo '<p>' . __( 'Please review the messages above before continuing!', 'shardb' ) . '<a class="button" href="' . $next_url .'">' . __("Next Sites") . '</a></p>';
 		break;
 		case 'global':
-			$errors = shardb_migrate_global_tables( &$wpdb );
+			$errors = shardb_migrate_global_tables( $wpdb );
 			if( !empty( $errors ) ) {
 				foreach( $errors as $e )
 					echo '<li><strong>' . $e . '</strong></li>';
