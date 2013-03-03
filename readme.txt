@@ -3,7 +3,7 @@ Contributors: wpmuguru
 Tags: database, sharding, multiple, database, multisite, network 
 Requires at least: 3.2
 Tested up to: 3.5
-Stable tag: 2.7.5
+Stable tag: 2.7.6
 
 Implements a MD5 hash based multiple database sharding structure for WordPress network blog tables.
 
@@ -40,6 +40,7 @@ This plugin is based on [HyperDB](http://wordpress.org/extend/plugins/hyperdb) w
 == Changelog ==
 
 = 2.7.6 =
+* Fixed notices issued by PHP 5.4.
 * Added 3.3.X support.
 * Added support for BuddyPress 1.5 forums.
 * Dropped support for pre 3.2 WordPress.
