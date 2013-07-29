@@ -3,7 +3,7 @@
 Plugin Name: SharDB site admin utilities
 Plugin URI: http://wpmututorials.com/plugins/shardb/
 Description: A Multi-database plugin for WordPress networks
-Version: 2.7.6
+Version: 2.7.7
 Author: Ron Rennick
 Author URI: http://ronandandrea.com/
 Network: true
@@ -73,8 +73,8 @@ function shardb_migrate() {
 	screen_icon();
 	echo '<h2>' . __( 'SharDB Migration', 'shardb' ) . '</h2>';
 
-	$action = isset($_GET['action']) ? $_GET['action'] : 'show';
-	$url = menu_page_url( __FUNCTION__, false );
+	$action = isset( $_GET['action'] ) ? $_GET['action'] : 'show';
+	$url = add_query_arg( array( 'page' => 'shardb_migrate' ), network_admin_url( 'settings.php' ) );
 	$start_url = add_query_arg( array( 'action' => 'migrate' ), $url );
 	$global_url = add_query_arg( array( 'action' => 'global' ), $url );
 
@@ -131,8 +131,8 @@ function shardb_migrate() {
 		case 'show':
 		default:
 			?><p><?php _e( 'You can migrate all the database tables on your network through this page. It works by calling the migrate script for each site automatically.', 'shardb' ); ?></p>
-			<p><a class="button" href="<?php echo $global_url; ?>"><?php _e( 'Migrate Global Tables', 'shardb' ); ?></a>
-			<a class="button" href="<?php echo $start_url; ?>"><?php _e( 'Migrate Sites', 'shardb' ); ?></a></p><?php
+			<p><a class="button" href="<?php echo esc_url( $global_url ); ?>"><?php _e( 'Migrate Global Tables', 'shardb' ); ?></a>
+			<a class="button" href="<?php echo esc_url( $start_url ); ?>"><?php _e( 'Migrate Sites', 'shardb' ); ?></a></p><?php
 		break;
 	}
 	echo '</div>';
